@@ -16,7 +16,15 @@ export class RouteRegistry {
   }
 
   addRoute(route: RouteBinding): void {
-    this.routes.push(route);
+    const exists = this.routes.some(r =>
+      r.method === route.method &&
+      r.path === route.path &&
+      r.handlerSymbol === route.handlerSymbol &&
+      r.handlerFile === route.handlerFile
+    );
+    if (!exists) {
+      this.routes.push(route);
+    }
   }
 
   addHook(hook: HookBinding): void {

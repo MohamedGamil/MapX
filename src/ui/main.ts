@@ -1,4 +1,13 @@
 import cytoscape from 'cytoscape';
+import dagre from 'cytoscape-dagre';
+import fcose from 'cytoscape-fcose';
+import cola from 'cytoscape-cola';
+import elk from 'cytoscape-elk';
+
+cytoscape.use(dagre);
+cytoscape.use(fcose);
+cytoscape.use(cola);
+cytoscape.use(elk);
 
 // Base Configuration and State
 let currentTab = 'graph';
@@ -178,6 +187,723 @@ async function loadStatus() {
 
 let rawGraphElements: any[] = [];
 let showClusters = false;
+let currentGraphMode: 'proximity' | 'directory' | 'focus' | 'full' = 'proximity';
+let focusSeedNode: string | null = null;
+let focusDepth = 1;
+let activeLayout: any = null;
+let activeLayoutName: 'fcose' | 'cose' | 'cola' | 'dagre' | 'elk' | 'concentric' | 'circle' | 'grid' = 'cola';
+
+// New states for Proximity Clusters Mode & Groupings & Modifications
+let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
+let activeClusterId: string | null = null;
+let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' = 'community';
+const removedNodes = new Set<string>();
+const removedEdges = new Set<string>();
+const customTags = new Map<string, string[]>(); // node ID -> tags array
+
+// Custom tags persistence via localStorage
+function getTagsStorageKey(): string {
+  const repoEl = document.getElementById('repo-name');
+  const repoName = repoEl?.textContent || 'mapx';
+  return `mapx-custom-tags:${repoName}`;
+}
+
+function saveCustomTags() {
+  try {
+    const obj: Record<string, string[]> = {};
+    customTags.forEach((tags, nodeId) => {
+      if (tags.length > 0) obj[nodeId] = tags;
+    });
+    localStorage.setItem(getTagsStorageKey(), JSON.stringify(obj));
+  } catch { /* ignore quota errors */ }
+}
+
+function loadCustomTags() {
+  try {
+    const raw = localStorage.getItem(getTagsStorageKey());
+    if (raw) {
+      const obj = JSON.parse(raw);
+      for (const [nodeId, tags] of Object.entries(obj)) {
+        if (Array.isArray(tags) && tags.length > 0) {
+          customTags.set(nodeId, tags as string[]);
+        }
+      }
+    }
+  } catch { /* ignore parse errors */ }
+}
+
+function getAllUsedTags(): string[] {
+  const allTags = new Set<string>();
+  customTags.forEach(tags => tags.forEach(t => allTags.add(t)));
+  return Array.from(allTags).sort();
+}
+
+// Color mapping for HTTP route method badges
+function getRouteMethodColor(method: string): string {
+  switch ((method || '').toUpperCase()) {
+    case 'GET':     return '#10b981'; // emerald
+    case 'POST':    return '#3b82f6'; // blue
+    case 'PUT':     return '#f59e0b'; // amber
+    case 'PATCH':   return '#14b8a6'; // teal
+    case 'DELETE':  return '#ef4444'; // red
+    case 'HEAD':    return '#6366f1'; // indigo
+    case 'OPTIONS': return '#8b5cf6'; // violet
+    case 'ANY':     return '#a855f7'; // purple
+    case 'MATCH':   return '#ec4899'; // pink
+    default:        return '#64748b'; // slate
+  }
+}
+
+// Color mapping for hook type badges
+function getHookTypeColor(hookType: string): string {
+  const t = (hookType || '').toLowerCase();
+  if (t.includes('middleware'))         return '#6366f1'; // indigo
+  if (t.includes('event') || t.includes('listener')) return '#06b6d4'; // cyan
+  if (t.includes('filter'))            return '#f59e0b'; // amber
+  if (t.includes('action'))            return '#f43f5e'; // rose
+  if (t.includes('lifecycle') || t.includes('init') || t.includes('boot') || t.includes('destroy')) return '#14b8a6'; // teal
+  if (t.includes('service_provider') || t.includes('provider')) return '#8b5cf6'; // violet
+  if (t.includes('guard'))             return '#ef4444'; // red
+  if (t.includes('pipe'))              return '#22d3ee'; // cyan-light
+  if (t.includes('interceptor'))       return '#a855f7'; // purple
+  if (t.includes('resolver') || t.includes('query') || t.includes('mutation')) return '#3b82f6'; // blue
+  if (t.includes('subscriber') || t.includes('subscription')) return '#ec4899'; // pink
+  return '#64748b'; // slate fallback
+}
+
+// Centralized layout configuration resolver
+function getLayoutConfigForName(layoutName: string, elementCount?: number): any {
+  const isLarge = (elementCount || 0) > 500;
+  const baseAnimate = !isLarge;
+
+  switch (layoutName) {
+    case 'fcose':
+      return {
+        name: 'fcose',
+        animate: baseAnimate,
+        animationDuration: 500,
+        quality: 'default',
+        randomize: true,
+        fit: true,
+        padding: 50,
+        nodeDimensionsIncludeLabels: true,
+        nodeRepulsion: () => 120000,
+        idealEdgeLength: () => 160,
+        edgeElasticity: () => 0.45,
+        gravity: 0.15,
+        gravityRange: 3.8,
+        numIter: 2500,
+        tile: true,
+        tilingPaddingVertical: 20,
+        tilingPaddingHorizontal: 20,
+        nodeSeparation: 100,
+      };
+    case 'cose':
+      return {
+        name: 'cose',
+        animate: baseAnimate ? 'end' : false,
+        animationDuration: 500,
+        fit: true,
+        padding: 50,
+        nodeDimensionsIncludeLabels: true,
+        nodeRepulsion: () => 120000,
+        idealEdgeLength: () => 160,
+        nodeOverlap: 80,
+        gravity: 0.05,
+        nestingFactor: 1.2,
+        componentSpacing: 60,
+        refresh: 20,
+      };
+    case 'cola':
+      return {
+        name: 'cola',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        randomize: true,
+        nodeDimensionsIncludeLabels: true,
+        maxSimulationTime: isLarge ? 2000 : 4000,
+        avoidOverlap: true,
+        convergenceThreshold: 0.001,
+        unconstrIter: 10,
+        userConstIter: 20,
+        allConstIter: 20,
+        nodeSpacing: () => 40,
+        edgeLength: undefined,
+        flow: undefined,
+        ungrabifyWhileSimulating: true,
+      };
+    case 'dagre':
+      return {
+        name: 'dagre',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        nodeSep: 50,
+        edgeSep: 10,
+        rankSep: 100,
+        rankDir: 'TB',
+        nodeDimensionsIncludeLabels: true,
+      };
+    case 'elk':
+      return {
+        name: 'elk',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        elk: {
+          algorithm: 'mrtree',
+          'elk.direction': 'DOWN',
+          'spacing.nodeNode': 40,
+          'spacing.edgeNode': 20,
+        },
+        nodeDimensionsIncludeLabels: true,
+      };
+    case 'concentric':
+      return {
+        name: 'concentric',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        concentric: (node: any) => node.degree ? node.degree() : 0,
+        levelWidth: () => 1,
+        minNodeSpacing: 30,
+      };
+    case 'circle':
+      return {
+        name: 'circle',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        avoidOverlap: true,
+        spacingFactor: 1.2,
+      };
+    case 'grid':
+      return {
+        name: 'grid',
+        animate: baseAnimate,
+        fit: true,
+        padding: 50,
+        avoidOverlap: true,
+        condense: true,
+      };
+    default:
+      return {
+        name: 'cose',
+        animate: baseAnimate ? 'end' : false,
+        fit: true,
+        padding: 50,
+        nodeRepulsion: () => 120000,
+        idealEdgeLength: () => 160,
+      };
+  }
+}
+
+async function loadClusters() {
+  try {
+    const res = await fetch('/api/clusters');
+    if (res.ok) {
+      rawClustersData = await res.json();
+    }
+  } catch (err) {
+    console.error('Failed to load clusters:', err);
+  }
+}
+
+function buildDirectoryAggregatedElements(rawElements: any[], useClusters: boolean): any[] {
+  const dirs = new Set<string>();
+  const fileToDir = new Map<string, string>();
+
+  // Extract file directories
+  for (const el of rawElements) {
+    if (el.data && !el.data.source && !el.data.target && el.data.type === 'file') {
+      const parts = el.data.id.split('/');
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+      dirs.add(dir);
+      fileToDir.set(el.data.id, dir);
+    }
+  }
+
+  const elements: any[] = [];
+
+  if (useClusters) {
+    // Parent folder nested compound nodes
+    const allDirs = new Set<string>();
+    dirs.forEach(dir => {
+      if (dir === 'root') {
+        allDirs.add('root');
+        return;
+      }
+      const parts = dir.split('/');
+      for (let i = 1; i <= parts.length; i++) {
+        allDirs.add(parts.slice(0, i).join('/'));
+      }
+    });
+
+    allDirs.forEach(dir => {
+      const isRoot = dir === 'root';
+      const hasParent = !isRoot && dir.includes('/');
+      const parentId = hasParent ? `dir:${dir.substring(0, dir.lastIndexOf('/'))}` : (isRoot ? null : 'dir:root');
+      
+      const nodeEl: any = {
+        data: {
+          id: `dir:${dir}`,
+          label: dir === 'root' ? 'root' : dir.substring(dir.lastIndexOf('/') + 1),
+          type: 'parent-folder'
+        }
+      };
+      if (parentId) {
+        nodeEl.data.parent = parentId;
+      }
+      elements.push(nodeEl);
+    });
+  } else {
+    // Create flat directory nodes with truncated labels
+    dirs.forEach(dir => {
+      let label = dir;
+      if (dir !== 'root') {
+        const parts = dir.split('/');
+        label = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : dir;
+      }
+      elements.push({
+        data: {
+          id: `dir:${dir}`,
+          label,
+          fullPath: dir,
+          type: 'parent-folder'
+        }
+      });
+    });
+  }
+
+  // Aggregate inter-directory edges
+  const dirEdges = new Map<string, { source: string, target: string, count: number }>();
+  for (const el of rawElements) {
+    if (el.data && el.data.source && el.data.target) {
+      const srcDir = fileToDir.get(el.data.source);
+      const tgtDir = fileToDir.get(el.data.target);
+      if (srcDir && tgtDir && srcDir !== tgtDir) {
+        const sourceId = `dir:${srcDir}`;
+        const targetId = `dir:${tgtDir}`;
+        const edgeKey = `${sourceId}->${targetId}`;
+        if (!dirEdges.has(edgeKey)) {
+          dirEdges.set(edgeKey, { source: sourceId, target: targetId, count: 0 });
+        }
+        dirEdges.get(edgeKey)!.count++;
+      }
+    }
+  }
+
+  dirEdges.forEach((info) => {
+    elements.push({
+      data: {
+        id: `dir-edge:${info.source}->${info.target}`,
+        source: info.source,
+        target: info.target,
+        type: 'aggregated-dependency',
+        label: `${info.count}`,
+        count: info.count
+      }
+    });
+  });
+
+  return elements;
+}
+
+function buildFocusModeElements(rawElements: any[], seedId: string, depth: number, useClusters: boolean): any[] {
+  const nodeMap = new Map<string, any>();
+  const edgesBySource = new Map<string, any[]>();
+  const edgesByTarget = new Map<string, any[]>();
+
+  for (const el of rawElements) {
+    if (el.data && !el.data.source && !el.data.target) {
+      nodeMap.set(el.data.id, el);
+    } else if (el.data && el.data.source && el.data.target) {
+      const src = el.data.source;
+      const tgt = el.data.target;
+      if (!edgesBySource.has(src)) edgesBySource.set(src, []);
+      if (!edgesByTarget.has(tgt)) edgesByTarget.set(tgt, []);
+      edgesBySource.get(src)!.push(el);
+      edgesByTarget.get(tgt)!.push(el);
+    }
+  }
+
+  const visitedNodes = new Set<string>([seedId]);
+  const visitedEdges = new Set<any>();
+  let currentLevel = new Set<string>([seedId]);
+
+  for (let d = 0; d < depth; d++) {
+    const nextLevel = new Set<string>();
+    for (const nodeId of currentLevel) {
+      const outEdges = edgesBySource.get(nodeId) || [];
+      for (const edge of outEdges) {
+        const tgt = edge.data.target;
+        visitedEdges.add(edge);
+        if (!visitedNodes.has(tgt)) {
+          visitedNodes.add(tgt);
+          nextLevel.add(tgt);
+        }
+      }
+      const inEdges = edgesByTarget.get(nodeId) || [];
+      for (const edge of inEdges) {
+        const src = edge.data.source;
+        visitedEdges.add(edge);
+        if (!visitedNodes.has(src)) {
+          visitedNodes.add(src);
+          nextLevel.add(src);
+        }
+      }
+    }
+    currentLevel = nextLevel;
+  }
+
+  const elements: any[] = [];
+
+  if (useClusters) {
+    const filesByDirectory: { [dirId: string]: any[] } = {};
+    const getParentId = (filePath: string): string => {
+      const parts = filePath.split('/');
+      return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
+    };
+
+    visitedNodes.forEach(id => {
+      const node = nodeMap.get(id);
+      if (node) {
+        const copy = JSON.parse(JSON.stringify(node));
+        if (id === seedId) {
+          copy.data.isSeed = true;
+        }
+        const parentId = getParentId(id);
+        copy.data.parent = parentId;
+        if (!filesByDirectory[parentId]) {
+          filesByDirectory[parentId] = [];
+        }
+        filesByDirectory[parentId].push(copy);
+      }
+    });
+
+    // Add parent nodes
+    Object.keys(filesByDirectory).forEach(dirId => {
+      elements.push({
+        data: {
+          id: dirId,
+          label: dirId === 'dir:root' ? 'root' : dirId.replace('dir:', ''),
+          type: 'parent'
+        }
+      });
+      elements.push(...filesByDirectory[dirId]);
+    });
+  } else {
+    visitedNodes.forEach(id => {
+      const node = nodeMap.get(id);
+      if (node) {
+        const copy = JSON.parse(JSON.stringify(node));
+        if (id === seedId) {
+          copy.data.isSeed = true;
+        }
+        elements.push(copy);
+      }
+    });
+  }
+
+  visitedEdges.forEach(edge => {
+    elements.push(JSON.parse(JSON.stringify(edge)));
+  });
+
+  return elements;
+}
+
+function buildProximityClusterElements(): any[] {
+  // 1. Get filtered nodes and edges
+  const fileNodes = rawGraphElements.filter(el => el.data && el.data.type === 'file' && !removedNodes.has(el.data.id));
+  const edges = rawGraphElements.filter(el => 
+    el.data && el.data.source && el.data.target && 
+    !removedEdges.has(el.data.id) &&
+    !removedNodes.has(el.data.source) && !removedNodes.has(el.data.target)
+  );
+
+  // Calculate degrees for orphan & singular detection
+  const degreeMap = new Map<string, number>();
+  fileNodes.forEach(n => degreeMap.set(n.data.id, 0));
+  edges.forEach(e => {
+    const src = e.data.source;
+    const tgt = e.data.target;
+    if (degreeMap.has(src)) degreeMap.set(src, degreeMap.get(src)! + 1);
+    if (degreeMap.has(tgt)) degreeMap.set(tgt, degreeMap.get(tgt)! + 1);
+  });
+
+  // Determine file-to-cluster assignment based on grouping strategy
+  const fileToCluster = new Map<string, string>();
+  
+  // Community map
+  const communityMap = new Map<string, string>();
+  if (rawClustersData && rawClustersData.memberships) {
+    rawClustersData.memberships.forEach((m: any) => {
+      communityMap.set(m.filePath, m.clusterName);
+    });
+  }
+
+  fileNodes.forEach(node => {
+    const fId = node.data.id;
+    const deg = degreeMap.get(fId) || 0;
+
+    // Special groups override
+    if (deg === 0) {
+      fileToCluster.set(fId, 'cluster:orphans');
+      return;
+    }
+    if (deg === 1) {
+      fileToCluster.set(fId, 'cluster:singulars');
+      return;
+    }
+
+    if (groupingStrategy === 'community') {
+      const comm = communityMap.get(fId) || 'community_unassigned';
+      fileToCluster.set(fId, `cluster:${comm}`);
+    } else if (groupingStrategy === 'directory') {
+      const parts = fId.split('/');
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+      fileToCluster.set(fId, `dir:${dir}`);
+    } else if (groupingStrategy === 'language') {
+      const lang = node.data.language || 'unknown';
+      fileToCluster.set(fId, `lang:${lang}`);
+    } else if (groupingStrategy === 'custom') {
+      const tags = customTags.get(fId) || [];
+      if (tags.length > 0) {
+        fileToCluster.set(fId, `tag:${tags[0]}`); // Group by first tag
+      } else {
+        fileToCluster.set(fId, 'tag:untagged');
+      }
+    }
+  });
+
+  const elements: any[] = [];
+
+  if (activeClusterId) {
+    // DRILL-DOWN expanded view of a specific cluster
+    const clusterFiles = fileNodes.filter(n => fileToCluster.get(n.data.id) === activeClusterId);
+    const clusterFileIds = new Set(clusterFiles.map(n => n.data.id));
+
+    // Also identify boundary nodes outside this cluster that have edges to cluster nodes
+    const boundaryNodes = new Set<string>();
+    const clusterEdges: any[] = [];
+
+    edges.forEach(edge => {
+      const src = edge.data.source;
+      const tgt = edge.data.target;
+      const srcIn = clusterFileIds.has(src);
+      const tgtIn = clusterFileIds.has(tgt);
+
+      if (srcIn && tgtIn) {
+        clusterEdges.push(JSON.parse(JSON.stringify(edge)));
+      } else if (srcIn || tgtIn) {
+        clusterEdges.push(JSON.parse(JSON.stringify(edge)));
+        if (srcIn) boundaryNodes.add(tgt);
+        if (tgtIn) boundaryNodes.add(src);
+      }
+    });
+
+    // Add nodes in cluster
+    clusterFiles.forEach(node => {
+      const copy = JSON.parse(JSON.stringify(node));
+      copy.data.isInsideCluster = true;
+      elements.push(copy);
+    });
+
+    // Add boundary nodes as visually distinct nodes
+    boundaryNodes.forEach(id => {
+      const node = fileNodes.find(n => n.data.id === id);
+      if (node) {
+        const copy = JSON.parse(JSON.stringify(node));
+        copy.data.isBoundaryNode = true;
+        elements.push(copy);
+      }
+    });
+
+    // Add edges
+    elements.push(...clusterEdges);
+
+  } else {
+    // TOP-LEVEL collapsed view of all clusters
+    const clusterCounts = new Map<string, number>();
+    fileToCluster.forEach((clustId) => {
+      clusterCounts.set(clustId, (clusterCounts.get(clustId) || 0) + 1);
+    });
+
+    // Render cluster nodes
+    clusterCounts.forEach((cnt, clustId) => {
+      let label = clustId;
+      if (clustId === 'cluster:orphans') label = `Orphaned Files (${cnt})`;
+      else if (clustId === 'cluster:singulars') label = `Singular Connected (${cnt})`;
+      else if (clustId.startsWith('cluster:')) {
+        const commId = clustId.replace('cluster:', '');
+        const commObj = rawClustersData.clusters?.find(c => c.name === commId);
+        label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+      } else if (clustId.startsWith('dir:')) {
+        label = `${clustId.replace('dir:', '')} (${cnt} files)`;
+      } else if (clustId.startsWith('lang:')) {
+        label = `${clustId.replace('lang:', '').toUpperCase()} (${cnt} files)`;
+      } else if (clustId.startsWith('tag:')) {
+        label = `Tag: ${clustId.replace('tag:', '')} (${cnt} files)`;
+      }
+
+      elements.push({
+        data: {
+          id: clustId,
+          label,
+          type: 'cluster-group',
+          fileCount: cnt,
+          isOrphans: clustId === 'cluster:orphans',
+          isSingulars: clustId === 'cluster:singulars'
+        }
+      });
+    });
+
+    // Aggregate inter-cluster edges
+    const interEdges = new Map<string, { source: string, target: string, count: number }>();
+    edges.forEach(edge => {
+      const srcClust = fileToCluster.get(edge.data.source);
+      const tgtClust = fileToCluster.get(edge.data.target);
+      if (srcClust && tgtClust && srcClust !== tgtClust) {
+        const key = `${srcClust}->${tgtClust}`;
+        if (!interEdges.has(key)) {
+          interEdges.set(key, { source: srcClust, target: tgtClust, count: 0 });
+        }
+        interEdges.get(key)!.count++;
+      }
+    });
+
+    interEdges.forEach((info) => {
+      elements.push({
+        data: {
+          id: `inter-edge:${info.source}->${info.target}`,
+          source: info.source,
+          target: info.target,
+          type: 'cluster-edge',
+          label: `${info.count}`,
+          count: info.count
+        }
+      });
+    });
+  }
+
+  return elements;
+}
+
+function buildGraphElementsForMode(): any[] {
+  if (currentGraphMode === 'proximity') {
+    return buildProximityClusterElements();
+  } else if (currentGraphMode === 'directory') {
+    return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
+  } else if (currentGraphMode === 'focus') {
+    if (!focusSeedNode) {
+      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+      focusSeedNode = firstFile ? firstFile.data.id : null;
+    }
+    if (focusSeedNode) {
+      return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+    }
+    return [];
+  } else {
+    const filteredRaw = rawGraphElements.filter(el => {
+      if (el.data && el.data.id && removedNodes.has(el.data.id)) return false;
+      if (el.data && el.data.source && (removedNodes.has(el.data.source) || removedNodes.has(el.data.target) || removedEdges.has(el.data.id))) return false;
+      return true;
+    });
+    return buildGraphElements(filteredRaw, showClusters);
+  }
+}
+
+function updateGraphDisplay() {
+  if (!cyInstance) return;
+
+  const newElements = buildGraphElementsForMode();
+
+  cyInstance.batch(() => {
+    cyInstance.elements().remove();
+    cyInstance.add(newElements);
+  });
+
+  const elementCount = newElements.length;
+
+  // Use the centralized layout resolver — always respect user's choice
+  // except for proximity top-level which defaults to fcose for physics clustering
+  if (currentGraphMode === 'proximity' && !activeClusterId) {
+    // Top-level proximity clusters: use fcose for best cluster separation
+    const config = getLayoutConfigForName('fcose', elementCount);
+    config.nodeRepulsion = () => 150000;
+    config.idealEdgeLength = () => 200;
+    config.gravity = 0.08;
+    runLayout(config);
+  } else if (currentGraphMode === 'full' && showClusters) {
+    // Full codebase with clusters uses preset layout
+    runLayout(getLayoutOptions(showClusters, true));
+  } else {
+    // All other cases: use the user's selected layout
+    runLayout(getLayoutConfigForName(activeLayoutName, elementCount));
+  }
+
+  // Update layout dropdown UI
+  const layoutSelect = document.getElementById('select-layout') as HTMLSelectElement;
+  if (layoutSelect && layoutSelect.value !== activeLayoutName) {
+    layoutSelect.value = activeLayoutName;
+  }
+}
+
+function runLayout(layoutConfig: any) {
+  if (activeLayout) {
+    try {
+      activeLayout.stop();
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  const visibleCount = cyInstance.elements(':visible').length;
+  if (visibleCount > 500) {
+    layoutConfig = { ...layoutConfig, animate: false };
+  }
+
+  // For Cola: scramble positions so it starts fresh, preventing vertical drift
+  if (layoutConfig.name === 'cola' && layoutConfig.randomize) {
+    const bb = cyInstance.extent();
+    const w = Math.max(bb.w, 600);
+    const h = Math.max(bb.h, 400);
+    cyInstance.nodes(':visible').forEach((node: any) => {
+      node.position({
+        x: bb.x1 + Math.random() * w,
+        y: bb.y1 + Math.random() * h,
+      });
+    });
+  }
+
+  if (visibleCount > 500) {
+    activeLayout = cyInstance.layout(layoutConfig);
+    activeLayout.run();
+    return;
+  }
+
+  if (layoutConfig.animate) {
+    if (layoutConfig.name === 'cose' || layoutConfig.name === 'fcose') {
+      layoutConfig = {
+        ...layoutConfig,
+        animate: 'end',
+        animationDuration: 500,
+        animationEasing: 'ease-out'
+      };
+    } else {
+      layoutConfig = {
+        ...layoutConfig,
+        animate: true,
+        animationDuration: 500,
+        animationEasing: 'ease-out'
+      };
+    }
+  }
+
+  activeLayout = cyInstance.layout(layoutConfig);
+  activeLayout.run();
+}
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   let processed: any[] = [];
@@ -398,6 +1124,42 @@ function getLayoutOptions(useClusters: boolean, animate = true) {
   }
 }
 
+// Graph Mode selector event listener — manages contextual visibility
+function updateToolbarVisibility(mode: string) {
+  const focusSearchContainer = document.getElementById('focus-search-container');
+  if (focusSearchContainer) {
+    focusSearchContainer.style.display = mode === 'focus' ? 'inline-flex' : 'none';
+  }
+
+  const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
+  if (groupingSelect) {
+    // Enabled only in proximity mode at root level (no cluster/directory drilldown)
+    groupingSelect.disabled = !(mode === 'proximity' && !activeClusterId);
+  }
+
+  const clustersBtn = document.getElementById('btn-toggle-clusters');
+  if (clustersBtn) {
+    // Clusters toggle only relevant in full and focus modes
+    // (proximity has its own clustering, directory has its own)
+    clustersBtn.style.display = (mode === 'full' || mode === 'focus') ? 'inline-flex' : 'none';
+  }
+
+  const breadcrumb = document.getElementById('cluster-breadcrumb');
+  if (breadcrumb) {
+    // Breadcrumbs visible in proximity (drilldown) and focus modes
+    const showBreadcrumb = (mode === 'proximity' && activeClusterId) || mode === 'focus';
+    breadcrumb.style.display = showBreadcrumb ? 'inline-flex' : 'none';
+  }
+
+  // Separator visible when any of breadcrumb or focus panel are showing
+  const separator = document.getElementById('toolbar-separator');
+  if (separator) {
+    const breadcrumbVisible = breadcrumb?.style.display !== 'none';
+    const focusVisible = focusSearchContainer?.style.display !== 'none';
+    separator.style.display = (breadcrumbVisible || focusVisible) ? 'block' : 'none';
+  }
+}
+
 // Setup Cytoscape view and fetch graph
 async function loadGraph() {
   try {
@@ -408,7 +1170,48 @@ async function loadGraph() {
     const container = document.getElementById('cy');
     if (!container) return;
 
-    const initialElements = buildGraphElements(rawGraphElements, showClusters);
+    // Load clusters mapping for Proximity Clusters Mode
+    await loadClusters();
+
+    // Decide default mode based on file count
+    const fileCount = rawGraphElements.filter(el => el.data && !el.data.source && !el.data.target && el.data.type === 'file').length;
+    if (fileCount > 1000) {
+      currentGraphMode = 'proximity';
+      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+      if (modeSelect) modeSelect.value = 'proximity';
+    } else {
+      currentGraphMode = 'full';
+      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+      if (modeSelect) modeSelect.value = 'full';
+    }
+
+    const focusSearchContainer = document.getElementById('focus-search-container');
+    if (focusSearchContainer) {
+      focusSearchContainer.style.display = currentGraphMode === 'focus' ? 'inline-flex' : 'none';
+    }
+
+    const groupingSelect = document.getElementById('select-grouping-strategy');
+    if (groupingSelect) {
+      groupingSelect.style.display = currentGraphMode === 'proximity' ? 'inline-flex' : 'none';
+    }
+
+    const breadcrumb = document.getElementById('cluster-breadcrumb');
+    const shouldDisplay = (currentGraphMode === 'proximity' && activeClusterId);
+    if (breadcrumb) breadcrumb.style.display = shouldDisplay ? 'inline-flex' : 'none';
+
+    // Populate focus search autocompletion datalist
+    const focusSearchList = document.getElementById('focus-search-list');
+    if (focusSearchList) {
+      focusSearchList.innerHTML = '';
+      const fileNodes = rawGraphElements.filter(el => el.data && el.data.type === 'file');
+      fileNodes.forEach(node => {
+        const option = document.createElement('option');
+        option.value = node.data.id;
+        focusSearchList.appendChild(option);
+      });
+    }
+
+    const initialElements = buildGraphElementsForMode();
 
     if (initialElements.length === 0) {
       container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; font-size: 15px; color: var(--text-muted); text-align: center; gap: 8px; padding: 20px;"><div style="font-size: 24px;">🕸️</div><div>No codebase graph elements found.</div><div style="font-size: 12px; opacity: 0.8;">Run a scan using the mapx CLI/MCP to index files and generate the graph.</div></div>';
@@ -420,7 +1223,7 @@ async function loadGraph() {
     cyInstance = cytoscape({
       container: container,
       elements: initialElements,
-      wheelSensitivity: 3.2,
+      wheelSensitivity: 1.5,
       style: [
         {
           selector: 'node',
@@ -645,20 +1448,343 @@ async function loadGraph() {
             'color': '#c678dd',
             'text-outline-color': '#14161a'
           }
+        },
+        {
+          selector: 'node[type="parent-folder"]',
+          style: {
+            'shape': 'round-rectangle',
+            'background-color': '#2d3139',
+            'border-width': '2px',
+            'border-color': '#61afef',
+            'width': '60px',
+            'height': '40px',
+            'font-size': '10px',
+            'font-weight': 'bold',
+            'color': '#abb2bf',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-outline-width': '0px',
+            'text-wrap': 'ellipsis',
+            'text-max-width': '100px',
+            'text-overflow-wrap': 'anywhere',
+            'z-index': 15
+          }
+        },
+        {
+          selector: 'edge[type="aggregated-dependency"]',
+          style: {
+            'width': (edge: any) => {
+              const cnt = edge.data('count') || 1;
+              return Math.min(1.5 + Math.log2(cnt), 7) + 'px';
+            },
+            'line-color': 'rgba(97, 175, 239, 0.45)',
+            'target-arrow-color': 'rgba(97, 175, 239, 0.45)',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'color': '#abb2bf',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '9px',
+            'font-weight': 'bold',
+            'text-background-color': '#1e222b',
+            'text-background-opacity': 1,
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle'
+          }
+        },
+        {
+          selector: 'node[?isSeed]',
+          style: {
+            'background-color': '#98c379',
+            'border-color': '#e5c07b',
+            'border-width': '3px',
+            'width': '46px',
+            'height': '46px',
+            'z-index': 9999
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"]',
+          style: {
+            'shape': 'hexagon',
+            'background-color': '#1e222b',
+            'background-opacity': 0.85,
+            'border-width': '3px',
+            'border-color': '#d19a66',
+            'width': (node: any) => {
+              const fileCount = node.data('fileCount') || 1;
+              return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+            },
+            'height': (node: any) => {
+              const fileCount = node.data('fileCount') || 1;
+              return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+            },
+            'color': '#ffffff',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '10.5px',
+            'font-weight': 'bold',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-outline-width': '2px',
+            'text-outline-color': '#14161a',
+            'text-wrap': 'ellipsis',
+            'text-max-width': (node: any) => {
+              const fileCount = node.data('fileCount') || 1;
+              return (60 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+            },
+            'text-overflow-wrap': 'anywhere',
+            'line-height': 1.25,
+            'z-index': 15,
+            'transition-property': 'background-color, border-color, border-width, width, height',
+            'transition-duration': 0.2
+          }
+        },
+        {
+          selector: 'node[?isBoundaryNode]',
+          style: {
+            'border-style': 'dashed',
+            'border-width': '2.5px',
+            'border-color': '#e5c07b',
+            'opacity': 0.45,
+            'text-opacity': 0.6
+          }
+        },
+        {
+          selector: 'edge[type="cluster-edge"]',
+          style: {
+            'width': (edge: any) => {
+              const cnt = edge.data('count') || 1;
+              return Math.min(2 + Math.log2(cnt) * 1.5, 8) + 'px';
+            },
+            'line-color': 'rgba(209, 154, 102, 0.45)',
+            'target-arrow-color': 'rgba(209, 154, 102, 0.45)',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'color': '#abb2bf',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '10px',
+            'font-weight': 'bold',
+            'text-background-color': '#1e222b',
+            'text-background-opacity': 0.95,
+            'text-background-padding': '3px',
+            'text-background-shape': 'roundrectangle'
+          }
         }
       ],
-      layout: getLayoutOptions(showClusters, false)
+      layout: currentGraphMode === 'directory' ? {
+        name: 'cose',
+        animate: false,
+        nodeRepulsion: () => 90000,
+        idealEdgeLength: () => 180
+      } : getLayoutOptions(showClusters, false)
     });
 
-    // Handle Layout button clicks
-    document.getElementById('btn-layout-fcose')?.addEventListener('click', () => {
-      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
+    // Layout dropdown handler
+    const layoutSelect = document.getElementById('select-layout') as HTMLSelectElement;
+    if (layoutSelect) {
+      layoutSelect.value = activeLayoutName;
+      layoutSelect.addEventListener('change', () => {
+        activeLayoutName = layoutSelect.value as any;
+        const elementCount = cyInstance.elements().length;
+        runLayout(getLayoutConfigForName(activeLayoutName, elementCount));
+      });
+    }
+
+    updateToolbarVisibility(currentGraphMode);
+
+    document.getElementById('select-graph-mode')?.addEventListener('change', (e) => {
+      const mode = (e.target as HTMLSelectElement).value as any;
+      currentGraphMode = mode;
+      updateToolbarVisibility(mode);
+      updateGraphDisplay();
     });
-    document.getElementById('btn-layout-circle')?.addEventListener('click', () => {
-      cyInstance.layout({ name: 'circle', animate: true }).run();
+
+    // Grouping strategy change listener
+    document.getElementById('select-grouping-strategy')?.addEventListener('change', (e) => {
+      groupingStrategy = (e.target as HTMLSelectElement).value as any;
+      updateGraphDisplay();
     });
-    document.getElementById('btn-layout-grid')?.addEventListener('click', () => {
-      cyInstance.layout({ name: 'grid', animate: true }).run();
+
+    // Breadcrumbs root button click listener
+    document.getElementById('btn-breadcrumb-root')?.addEventListener('click', () => {
+      activeClusterId = null;
+      updateToolbarVisibility(currentGraphMode);
+
+      const breadcrumb = document.getElementById('cluster-breadcrumb');
+      if (breadcrumb) {
+        breadcrumb.style.display = 'none';
+      }
+
+      updateGraphDisplay();
+    });
+
+    // === Custom Autocomplete for Neighborhood Focus Mode ===
+    const focusSearchInput = document.getElementById('focus-search-input') as HTMLInputElement;
+    const focusAutocomplete = document.getElementById('focus-autocomplete') as HTMLDivElement;
+    let acActiveIndex = -1;
+    let acItems: HTMLElement[] = [];
+    let searchDebounceTimeout: any = null;
+
+    function getFileNodes() {
+      return rawGraphElements.filter(el => el.data && el.data.type === 'file');
+    }
+
+    function highlightMatch(text: string, query: string): string {
+      if (!query) return text;
+      const idx = text.toLowerCase().indexOf(query.toLowerCase());
+      if (idx === -1) return text;
+      return text.substring(0, idx) +
+        `<span class="ac-match">${text.substring(idx, idx + query.length)}</span>` +
+        text.substring(idx + query.length);
+    }
+
+    function showAutocomplete(query: string) {
+      if (!focusAutocomplete || !query) {
+        hideAutocomplete();
+        return;
+      }
+
+      const fileNodes = getFileNodes();
+      const lowerQuery = query.toLowerCase();
+      const matches = fileNodes
+        .filter(el => el.data.id.toLowerCase().includes(lowerQuery))
+        .slice(0, 10);
+
+      if (matches.length === 0) {
+        focusAutocomplete.innerHTML = '<div class="focus-autocomplete-empty">No matching files found</div>';
+        focusAutocomplete.classList.add('open');
+        acItems = [];
+        acActiveIndex = -1;
+        return;
+      }
+
+      focusAutocomplete.innerHTML = matches.map((el, i) => {
+        const id = el.data.id;
+        const fileName = id.split('/').pop() || id;
+        const dirPath = id.includes('/') ? id.substring(0, id.lastIndexOf('/')) : '';
+        const lang = el.data.language || '';
+        return `<div class="focus-autocomplete-item${i === 0 ? ' active' : ''}" data-file-id="${id}">
+          <span class="ac-file-name">${highlightMatch(fileName, lowerQuery)}</span>
+          <span class="ac-file-path">${dirPath ? highlightMatch(dirPath, lowerQuery) : ''}</span>
+          ${lang ? `<span class="ac-lang-badge">${lang}</span>` : ''}
+        </div>`;
+      }).join('');
+
+      focusAutocomplete.classList.add('open');
+      acItems = Array.from(focusAutocomplete.querySelectorAll('.focus-autocomplete-item'));
+      acActiveIndex = 0;
+    }
+
+    function hideAutocomplete() {
+      if (focusAutocomplete) {
+        focusAutocomplete.classList.remove('open');
+        focusAutocomplete.innerHTML = '';
+      }
+      acItems = [];
+      acActiveIndex = -1;
+    }
+
+    function selectAutocompleteItem(fileId: string) {
+      focusSeedNode = fileId;
+      if (focusSearchInput) focusSearchInput.value = fileId;
+      hideAutocomplete();
+      // Update breadcrumb to show focused file
+      const activeLabel = document.getElementById('breadcrumb-active-cluster');
+      if (activeLabel) activeLabel.textContent = fileId.split('/').pop() || fileId;
+      const breadcrumb = document.getElementById('cluster-breadcrumb');
+      if (breadcrumb) breadcrumb.style.display = 'inline-flex';
+
+      const rootBtn = document.getElementById('btn-breadcrumb-root');
+      if (rootBtn) rootBtn.textContent = 'Focus';
+
+      updateGraphDisplay();
+    }
+
+    focusSearchInput?.addEventListener('input', (e) => {
+      clearTimeout(searchDebounceTimeout);
+      const query = (e.target as HTMLInputElement).value.trim();
+      searchDebounceTimeout = setTimeout(() => showAutocomplete(query), 150);
+    });
+
+    focusSearchInput?.addEventListener('keydown', (e) => {
+      if (!focusAutocomplete?.classList.contains('open')) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (acActiveIndex < acItems.length - 1) {
+          acItems[acActiveIndex]?.classList.remove('active');
+          acActiveIndex++;
+          acItems[acActiveIndex]?.classList.add('active');
+          acItems[acActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (acActiveIndex > 0) {
+          acItems[acActiveIndex]?.classList.remove('active');
+          acActiveIndex--;
+          acItems[acActiveIndex]?.classList.add('active');
+          acItems[acActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (acActiveIndex >= 0 && acItems[acActiveIndex]) {
+          const fileId = acItems[acActiveIndex].getAttribute('data-file-id');
+          if (fileId) selectAutocompleteItem(fileId);
+        }
+      } else if (e.key === 'Escape') {
+        hideAutocomplete();
+      }
+    });
+
+    focusAutocomplete?.addEventListener('click', (e) => {
+      const item = (e.target as HTMLElement).closest('.focus-autocomplete-item');
+      if (item) {
+        const fileId = item.getAttribute('data-file-id');
+        if (fileId) selectAutocompleteItem(fileId);
+      }
+    });
+
+    // Close autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+      if (focusSearchInput && focusAutocomplete) {
+        if (!focusSearchInput.contains(e.target as Node) && !focusAutocomplete.contains(e.target as Node)) {
+          hideAutocomplete();
+        }
+      }
+    });
+
+    // Segmented Depth Toggle
+    const depthButtons = document.querySelectorAll('.depth-btn');
+    depthButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        depthButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        focusDepth = parseInt(btn.getAttribute('data-depth') || '1', 10);
+        if (focusSeedNode) updateGraphDisplay();
+      });
+    });
+
+    // Focus clear button
+    document.getElementById('btn-focus-clear')?.addEventListener('click', () => {
+      if (focusSearchInput) focusSearchInput.value = '';
+      hideAutocomplete();
+      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+      focusSeedNode = firstFile ? firstFile.data.id : null;
+      updateGraphDisplay();
+    });
+
+    // Register double click / double tap event to focus on a node
+    cyInstance.on('dbltap', 'node', (evt: any) => {
+      const node = evt.target;
+      const data = node.data();
+      if (currentGraphMode === 'focus' && data.type === 'file') {
+        focusSeedNode = data.id;
+        if (focusSearchInput) {
+          focusSearchInput.value = data.id;
+        }
+        updateGraphDisplay();
+      }
     });
 
     // Toggle clusters button listener
@@ -691,12 +1817,7 @@ async function loadGraph() {
         btn.classList.add('btn-secondary');
       }
 
-      cyInstance.batch(() => {
-        cyInstance.elements().remove();
-        cyInstance.add(buildGraphElements(rawGraphElements, showClusters));
-      });
-
-      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
+      updateGraphDisplay();
     });
 
     // Filter by language dropdown listener
@@ -713,46 +1834,248 @@ async function loadGraph() {
       }
     });
 
+    // Helper to build organized related flows for a node
+    function buildRelatedFlowsHTML(node: any): string {
+      const id = node.id();
+      const isCluster = node.data('type') === 'parent';
+      const label = isCluster ? id.replace('dir:', '') : id;
+      
+      const outgoingEdges = node.outgoers('edge');
+      const incomingEdges = node.incomers('edge');
+      
+      let html = `<div class="flows-section">`;
+      html += `<div class="flows-title">Related Flows</div>`;
+      
+      // Outgoing Group (Collapsible details, collapsed by default)
+      html += `<details class="flow-details-el">`;
+      html += `<summary class="flow-summary-el">`;
+      html += `<svg class="flow-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+      html += `<span class="flow-group-title outgoing" style="margin: 0; display: inline-flex;">Outgoing (Dependencies)</span>`;
+      html += `</summary>`;
+      html += `<div class="flow-content-el">`;
+      
+      if (outgoingEdges && outgoingEdges.length > 0) {
+        html += `<ul class="flow-list">`;
+        outgoingEdges.forEach((edge: any) => {
+          const edgeId = edge.id();
+          const edgeType = edge.data('type') || 'dependency';
+          const targetNode = edge.target();
+          const targetId = targetNode.id();
+          const targetLabel = targetNode.data('type') === 'parent' ? targetId.replace('dir:', '') : targetId;
+          
+          html += `
+            <li class="flow-item">
+              <span class="flow-current">${label}</span>
+              <button type="button" class="flow-clickable-edge" data-go-id="${edgeId}">${edgeType.toUpperCase()}</button>
+              <span class="flow-arrow">&rarr;</span>
+              <button type="button" class="flow-clickable-node" data-go-id="${targetId}">${targetLabel}</button>
+            </li>
+          `;
+        });
+        html += `</ul>`;
+      } else {
+        html += `<div class="flow-empty">No outgoing dependencies</div>`;
+      }
+      html += `</div>`;
+      html += `</details>`;
+      
+      // Incoming Group (Collapsible details, collapsed by default)
+      html += `<details class="flow-details-el">`;
+      html += `<summary class="flow-summary-el">`;
+      html += `<svg class="flow-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+      html += `<span class="flow-group-title incoming" style="margin: 0; display: inline-flex;">Incoming (Dependents)</span>`;
+      html += `</summary>`;
+      html += `<div class="flow-content-el">`;
+      
+      if (incomingEdges && incomingEdges.length > 0) {
+        html += `<ul class="flow-list">`;
+        incomingEdges.forEach((edge: any) => {
+          const edgeId = edge.id();
+          const edgeType = edge.data('type') || 'dependency';
+          const sourceNode = edge.source();
+          const sourceId = sourceNode.id();
+          const sourceLabel = sourceNode.data('type') === 'parent' ? sourceId.replace('dir:', '') : sourceId;
+          
+          html += `
+            <li class="flow-item">
+              <button type="button" class="flow-clickable-node incoming-node" data-go-id="${sourceId}">${sourceLabel}</button>
+              <span class="flow-arrow">&rarr;</span>
+              <button type="button" class="flow-clickable-edge" data-go-id="${edgeId}">${edgeType.toUpperCase()}</button>
+              <span class="flow-arrow">&rarr;</span>
+              <span class="flow-current">${label}</span>
+            </li>
+          `;
+        });
+        html += `</ul>`;
+      } else {
+        html += `<div class="flow-empty">No incoming dependents</div>`;
+      }
+      html += `</div>`;
+      html += `</details>`;
+      
+      html += `</div>`;
+      return html;
+    }
+
+    // Helper to build source & destination nodes list for an edge
+    function buildRelatedNodesForEdgeHTML(edge: any): string {
+      const sourceNode = edge.source();
+      const targetNode = edge.target();
+      const sourceId = sourceNode.id();
+      const targetId = targetNode.id();
+      const sourceLabel = sourceNode.data('type') === 'parent' ? sourceId.replace('dir:', '') : sourceId;
+      const targetLabel = targetNode.data('type') === 'parent' ? targetId.replace('dir:', '') : targetId;
+
+      return `
+        <div class="flows-section">
+          <div class="flows-title">Related Nodes</div>
+          <div class="flow-group" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Source Node</div>
+            <button type="button" class="flow-clickable-node" data-go-id="${sourceId}">
+              ${sourceLabel}
+            </button>
+          </div>
+          <div class="flow-group" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Destination Node</div>
+            <button type="button" class="flow-clickable-node" data-go-id="${targetId}" style="background: rgba(97, 175, 239, 0.16); color: #61afef; border-color: rgba(97, 175, 239, 0.35);">
+              ${targetLabel}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     // Node & Edge selection details panel and highlighting
     cyInstance.on('tap', 'node', (evt: any) => {
       const node = evt.target;
       const data = node.data();
       const details = document.getElementById('details-content');
+      
+      // If tapping a collapsed cluster-group node, enter drill-down view
+      if (data.type === 'cluster-group') {
+        activeClusterId = data.id;
+        updateToolbarVisibility(currentGraphMode);
+        const breadcrumb = document.getElementById('cluster-breadcrumb');
+        if (breadcrumb) {
+          breadcrumb.style.display = 'inline-flex';
+        }
+        const activeLabel = document.getElementById('breadcrumb-active-cluster');
+        if (activeLabel) {
+          activeLabel.textContent = data.label || data.id;
+        }
+        updateGraphDisplay();
+        return;
+      }
+
       if (details) {
         if (data.type === 'parent') {
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Type</span>
-                <span style="color: #98c379; font-weight: bold; text-align: right; word-break: break-all;">DIRECTORY CLUSTER</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Type</span>
+                <span class="detail-stat-value" style="color: #98c379; font-weight: bold;">DIRECTORY CLUSTER</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Path</span>
-                <span style="word-break: break-all; text-align: right;">${data.id.replace('dir:', '')}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Path</span>
+                <span class="detail-stat-value">${data.fullPath || data.id.replace('dir:', '')}</span>
               </div>
             </div>
-          `;
+          ` + buildRelatedFlowsHTML(node);
         } else {
+          const tags = customTags.get(data.id) || [];
+          const tagsListHtml = tags.map(t =>
+            `<span class="tag-badge">${t}<button class="tag-badge-remove" data-node-id="${data.id}" data-tag="${t}" title="Remove tag">&times;</button></span>`
+          ).join('');
+
+          // Compute degree stats
+          const inDeg = node.indegree ? node.indegree() : 0;
+          const outDeg = node.outdegree ? node.outdegree() : 0;
+          const totalDeg = node.degree ? node.degree() : (inDeg + outDeg);
+
+          // Check for enriched data from API
+          const symbolCount = data.symbolCount || 0;
+          const pagerank = data.pagerank != null ? (data.pagerank * 1000).toFixed(2) : null;
+
+          // Find cluster membership if available
+          let clusterLabel = '';
+          if (node.parent && node.parent().length > 0) {
+            const parentData = node.parent().data();
+            clusterLabel = parentData?.label || parentData?.id || '';
+          }
+          
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Path</span>
-                <span style="word-break: break-all; text-align: right;">${data.id}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Path</span>
+                <span class="detail-stat-value">${data.id}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Language</span>
-                <span style="text-align: right; word-break: break-all;">${data.language ? data.language.toUpperCase() : 'UNKNOWN'}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Language</span>
+                <span class="detail-stat-value">${data.language ? data.language.toUpperCase() : 'UNKNOWN'}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
-                <span style="text-align: right; word-break: break-all;">${data.lines || 'N/A'}</span>
+
+              <!-- Stats Grid -->
+              <div class="detail-stat-grid">
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">Lines</span>
+                  <span class="detail-stat-mini-value">${data.lines || '—'}</span>
+                </div>
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">Size</span>
+                  <span class="detail-stat-mini-value">${data.size ? `${(data.size / 1024).toFixed(1)}K` : '—'}</span>
+                </div>
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">In / Out</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-green);">${inDeg} / ${outDeg}</span>
+                </div>
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">Connections</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-blue);">${totalDeg}</span>
+                </div>
+                ${symbolCount > 0 ? `
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">Symbols</span>
+                  <span class="detail-stat-mini-value">${symbolCount}</span>
+                </div>` : ''}
+                ${pagerank ? `
+                <div class="detail-stat-mini">
+                  <span class="detail-stat-mini-label">PageRank</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-purple);">${pagerank}</span>
+                </div>` : ''}
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Size</span>
-                <span style="text-align: right; word-break: break-all;">${data.size ? `${(data.size / 1024).toFixed(2)} KB` : 'N/A'}</span>
+
+              ${data.isBoundaryNode ? `
+              <div class="detail-stat-row">
+                <span class="detail-stat-label" style="color: #d19a66;">Role</span>
+                <span class="detail-stat-value" style="color: #d19a66;">Boundary Node</span>
+              </div>
+              ` : ''}
+
+              ${clusterLabel ? `
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Cluster</span>
+                <span class="detail-stat-value" style="color: var(--syntax-cyan);">${clusterLabel}</span>
+              </div>
+              ` : ''}
+              
+              <!-- Custom Tags Section -->
+              <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <span class="detail-stat-label">Custom Tags</span>
+                <div style="margin-bottom: 4px; display: flex; flex-wrap: wrap;">${tagsListHtml || '<span style="color: var(--text-muted); font-style: italic; font-size: 10px;">No tags</span>'}</div>
+                <div style="display: flex; gap: 6px; position: relative;">
+                  <input type="text" id="input-new-tag" placeholder="Add tag..." class="form-control" style="padding: 4px 8px; font-size: 11px; height: 26px; border-radius: 4px;">
+                  <button id="btn-add-tag" class="btn" style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 4px; flex-shrink: 0;">Add</button>
+                </div>
+              </div>
+              
+              <!-- Actions Section -->
+              <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
+                <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                  Remove Node from View
+                </button>
               </div>
             </div>
-          `;
+          ` + buildRelatedFlowsHTML(node);
         }
       }
 
@@ -811,7 +2134,7 @@ async function loadGraph() {
       const data = edge.data();
       const details = document.getElementById('details-content');
       if (details) {
-        if (data.type === 'cluster-dependency') {
+        if (data.type === 'cluster-dependency' || data.type === 'cluster-edge') {
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
@@ -832,35 +2155,51 @@ async function loadGraph() {
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
                 <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
-                <span style="color: #61afef; font-weight: bold; text-align: right;">${data.count} file-level edge(s)</span>
+                <span style="color: #61afef; font-weight: bold; text-align: right;">${data.count || 1} file-level edge(s)</span>
+              </div>
+              
+              <!-- Actions Section -->
+              <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                  Remove Edge from View
+                </button>
               </div>
             </div>
-          `;
+          ` + (data.type === 'cluster-dependency' ? buildRelatedNodesForEdgeHTML(edge) : '');
         } else {
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge ID</span>
-                <span style="word-break: break-all; text-align: right;">${data.id}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Source</span>
+                <span class="detail-stat-value"><a href="#" data-go-id="${data.source}" style="color: var(--syntax-blue); text-decoration: none;">${data.source.split('/').pop()}</a></span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source</span>
-                <span style="word-break: break-all; text-align: right;">${data.source}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Target</span>
+                <span class="detail-stat-value"><a href="#" data-go-id="${data.target}" style="color: var(--syntax-blue); text-decoration: none;">${data.target.split('/').pop()}</a></span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Target</span>
-                <span style="word-break: break-all; text-align: right;">${data.target}</span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Edge Type</span>
+                <span class="detail-stat-value"><span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">${data.type}</span></span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
-                <span style="text-align: right;"><span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">${data.type}</span></span>
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Verifiability</span>
+                <span class="detail-stat-value"><span class="verifiability-badge ${data.verifiability === 'verified' ? 'verified' : 'inferred'}">${data.verifiability || 'unknown'}</span></span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Verify</span>
-                <span style="text-align: right; word-break: break-all;">${data.verifiability}</span>
+              ${data.weight ? `
+              <div class="detail-stat-row">
+                <span class="detail-stat-label">Weight</span>
+                <span class="detail-stat-value">${data.weight}</span>
+              </div>
+              ` : ''}
+              
+              <!-- Actions Section -->
+              <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                  Remove Edge from View
+                </button>
               </div>
             </div>
-          `;
+          ` + buildRelatedNodesForEdgeHTML(edge);
         }
       }
 
@@ -1035,9 +2374,10 @@ async function loadRoutes() {
       } else {
         data.routes.forEach((r: any) => {
           const tr = document.createElement('tr');
+          const methodColor = getRouteMethodColor(r.method);
           tr.innerHTML = `
             <td><strong>${r.framework}</strong></td>
-            <td><span style="background:#10b981; padding:2px 6px; border-radius:4px; font-size:11px; color:#fff;">${r.method}</span></td>
+            <td><span class="method-badge" style="background:${methodColor};">${r.method}</span></td>
             <td><code>${r.path}</code></td>
             <td style="color:#60a5fa;">${r.handlerSymbol || r.handlerFile}</td>
           `;
@@ -1060,9 +2400,10 @@ async function loadRoutes() {
       } else {
         data.hooks.forEach((h: any) => {
           const tr = document.createElement('tr');
+          const hookColor = getHookTypeColor(h.hookType);
           tr.innerHTML = `
             <td><strong>${h.framework}</strong></td>
-            <td><span style="background:#8b5cf6; padding:2px 6px; border-radius:4px; font-size:11px; color:#fff;">${h.hookType}</span></td>
+            <td><span class="hook-badge" style="background:${hookColor};">${h.hookType}</span></td>
             <td><code>${h.hookName}</code></td>
             <td style="color:#60a5fa;">${h.handlerSymbol || h.handlerFile}</td>
           `;
@@ -1378,5 +2719,184 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSymbolDetails(symName);
       }
     }
+  });
+
+  // Click delegation for selection details panel related items and actions
+  const detailsContent = document.getElementById('details-content');
+  detailsContent?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    
+    // 1. Remove Node action
+    const removeNodeBtn = target.closest('.btn-action-remove-node');
+    if (removeNodeBtn) {
+      const nodeId = removeNodeBtn.getAttribute('data-node-id');
+      if (nodeId) {
+        removedNodes.add(nodeId);
+        const resetBtn = document.getElementById('btn-reset-hidden');
+        if (resetBtn) resetBtn.style.display = 'inline-flex';
+        updateGraphDisplay();
+        if (detailsContent) detailsContent.innerHTML = 'Click a file node or dependency edge to view details.';
+      }
+      return;
+    }
+
+    // 2. Remove Edge action
+    const removeEdgeBtn = target.closest('.btn-action-remove-edge');
+    if (removeEdgeBtn) {
+      const edgeId = removeEdgeBtn.getAttribute('data-edge-id');
+      if (edgeId) {
+        removedEdges.add(edgeId);
+        const resetBtn = document.getElementById('btn-reset-hidden');
+        if (resetBtn) resetBtn.style.display = 'inline-flex';
+        updateGraphDisplay();
+        if (detailsContent) detailsContent.innerHTML = 'Click a file node or dependency edge to view details.';
+      }
+      return;
+    }
+
+    // 3. Add Custom Tag action
+    const addTagBtn = target.closest('#btn-add-tag');
+    if (addTagBtn) {
+      const input = document.getElementById('input-new-tag') as HTMLInputElement;
+      const tagVal = input?.value.trim();
+      if (tagVal) {
+        // Find selected node in cyInstance
+        const selectedNode = cyInstance.$('node:selected');
+        if (selectedNode && selectedNode.length > 0) {
+          const nodeId = selectedNode.id();
+          const tags = customTags.get(nodeId) || [];
+          if (!tags.includes(tagVal)) {
+            tags.push(tagVal);
+            customTags.set(nodeId, tags);
+            saveCustomTags();
+          }
+          // Clear the input
+          if (input) input.value = '';
+          // Re-trigger selection to update details panel HTML
+          selectedNode.trigger('tap');
+          
+          // If current grouping strategy is custom, update graph display
+          if (groupingStrategy === 'custom') {
+            updateGraphDisplay();
+          }
+        }
+      }
+      return;
+    }
+
+    // 4. Remove Custom Tag action
+    const removeTagBtn = target.closest('.tag-badge-remove');
+    if (removeTagBtn) {
+      const nodeId = removeTagBtn.getAttribute('data-node-id');
+      const tagVal = removeTagBtn.getAttribute('data-tag');
+      if (nodeId && tagVal) {
+        const tags = customTags.get(nodeId) || [];
+        const idx = tags.indexOf(tagVal);
+        if (idx !== -1) {
+          tags.splice(idx, 1);
+          if (tags.length === 0) {
+            customTags.delete(nodeId);
+          } else {
+            customTags.set(nodeId, tags);
+          }
+          saveCustomTags();
+        }
+        // Re-trigger selection to update details panel
+        const selectedNode = cyInstance?.getElementById(nodeId);
+        if (selectedNode && selectedNode.length > 0) {
+          selectedNode.trigger('tap');
+        }
+        if (groupingStrategy === 'custom') {
+          updateGraphDisplay();
+        }
+      }
+      return;
+    }
+
+    // 5. Clickable Node/Edge navigation
+    const clickable = target.closest('[data-go-id]');
+    if (clickable && cyInstance) {
+      e.preventDefault();
+      const id = clickable.getAttribute('data-go-id');
+      if (id) {
+        const ele = cyInstance.getElementById(id);
+        if (ele && ele.length > 0) {
+          ele.trigger('tap');
+          
+          // Focus/center the graph on the clicked element
+          cyInstance.animate({
+            center: { eles: ele }
+          }, {
+            duration: 350
+          });
+        }
+      }
+    }
+  });
+
+  // Load custom tags from localStorage
+  loadCustomTags();
+
+  // Reset hidden files/edges button
+  document.getElementById('btn-reset-hidden')?.addEventListener('click', () => {
+    removedNodes.clear();
+    removedEdges.clear();
+    const resetBtn = document.getElementById('btn-reset-hidden');
+    if (resetBtn) resetBtn.style.display = 'none';
+    updateGraphDisplay();
+  });
+
+  // Reset All button — restore all toolbar state to defaults
+  document.getElementById('btn-reset-all')?.addEventListener('click', () => {
+    // Reset mode
+    currentGraphMode = 'proximity';
+    const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+    if (modeSelect) modeSelect.value = 'proximity';
+
+    // Reset layout
+    activeLayoutName = 'cola';
+    const layoutSelect = document.getElementById('select-layout') as HTMLSelectElement;
+    if (layoutSelect) layoutSelect.value = 'cola';
+
+    // Reset grouping
+    groupingStrategy = 'community';
+    const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
+    if (groupingSelect) groupingSelect.value = 'community';
+
+    // Reset language filter
+    const langFilter = document.getElementById('filter-lang') as HTMLSelectElement;
+    if (langFilter) langFilter.value = '';
+
+    // Reset focus state
+    focusSeedNode = null;
+    focusDepth = 1;
+    const focusInput = document.getElementById('focus-search-input') as HTMLInputElement;
+    if (focusInput) focusInput.value = '';
+    const depthBtns = document.querySelectorAll('.depth-btn');
+    depthBtns.forEach(b => b.classList.remove('active'));
+    if (depthBtns[0]) depthBtns[0].classList.add('active');
+
+    // Reset clusters
+    showClusters = false;
+    activeClusterId = null;
+
+    // Reset hidden nodes/edges
+    removedNodes.clear();
+    removedEdges.clear();
+    const resetHiddenBtn = document.getElementById('btn-reset-hidden');
+    if (resetHiddenBtn) resetHiddenBtn.style.display = 'none';
+
+    // Update toolbar visibility and graph
+    const focusPanel = document.getElementById('focus-search-container');
+    if (focusPanel) focusPanel.style.display = 'none';
+    const groupingEl = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
+    if (groupingEl) groupingEl.disabled = false;
+    const clustersBtn = document.getElementById('btn-toggle-clusters');
+    if (clustersBtn) clustersBtn.style.display = 'none';
+    const breadcrumb = document.getElementById('cluster-breadcrumb');
+    if (breadcrumb) breadcrumb.style.display = 'none';
+    updateToolbarVisibility(currentGraphMode);
+
+    updateGraphDisplay();
   });
 });

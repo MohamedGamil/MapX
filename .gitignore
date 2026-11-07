@@ -6,7 +6,7 @@
 # Ignore NodeJS app artifacts
 node_modules/
 dist/
-coverage
+coverage/
 .env
 .idea
 *.log
@@ -17,7 +17,9 @@ build
 out
 
 # Ignore test artifacts
-test-results
+test-results/
+coverage/
+.vitest/
 
 # Ignore editor-specific files
 *.sublime-project

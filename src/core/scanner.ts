@@ -8,14 +8,15 @@ import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile } from '../languages/registry.js';
+import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
-import { minimatch } from 'minimatch';
+import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
+import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -49,7 +50,7 @@ interface DiscoveredFile extends FileInfo {
 export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
   return (rel: string) => {
     if (excludes.some(p => {
-      if (minimatch(rel, p, { dot: true })) return true;
+      if (picomatch.isMatch(rel, p, { dot: true })) return true;
       const segments = rel.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -58,7 +59,7 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
     }
     if (includes.length > 0) {
       const matched = includes.some(p => {
-        if (minimatch(rel, p, { dot: true })) return true;
+        if (picomatch.isMatch(rel, p, { dot: true })) return true;
         const segments = rel.split('/');
         if (segments.some(seg => seg === p)) return true;
         return false;
@@ -294,7 +295,21 @@ export class Scanner {
       const activeFrameworks = activeDetectors.map(d => d.name);
       const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
 
-      const parseResults = await this.parseFilesParallel(toParse, workspaceRoot, ignoredSymbols);
+      let parsedFilesCount = 0;
+      const parseResults = await this.parseFilesParallel(
+        toParse,
+        workspaceRoot,
+        ignoredSymbols,
+        (relPath) => {
+          parsedFilesCount++;
+          this.onProgress?.({
+            phase: 'parse',
+            current: unchangedFiles.length + resumedCompleted.size + parsedFilesCount,
+            total: discovered.length,
+            file: relPath,
+          });
+        }
+      );
 
       const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
         const allTrackedFiles = this.store.getAllFiles();
@@ -320,12 +335,7 @@ export class Scanner {
           completed.add(toParse[i].relativePath);
         }
 
-        this.onProgress?.({
-          phase: 'parse',
-          current: completed.size,
-          total: discovered.length,
-          file: toParse[batchEnd - 1].relativePath,
-        });
+
 
         this.saveResumeState(repo.name, {
           totalFiles: discovered.length,
@@ -520,10 +530,20 @@ export class Scanner {
     const activeFrameworks = activeDetectors.map(d => d.name);
     const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
 
+    let parsedFilesCount = 0;
     const parseResults = await this.parseFilesParallel(
       toReindex.map(r => r.fileInfo),
       workspaceRoot,
-      ignoredSymbols
+      ignoredSymbols,
+      (relPath) => {
+        parsedFilesCount++;
+        this.onProgress?.({
+          phase: 'parse',
+          current: parsedFilesCount,
+          total: toReindex.length,
+          file: relPath,
+        });
+      }
     );
 
     let totalSymbols = 0;
@@ -540,12 +560,7 @@ export class Scanner {
       totalEdges += result.references.length;
       langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
 
-      this.onProgress?.({
-        phase: 'parse',
-        current: i + 1,
-        total: changes.length,
-        file: relPath,
-      });
+
     }
 
     if (!this.aborted) {
@@ -671,16 +686,31 @@ export class Scanner {
     return deleted;
   }
 
-  private async parseFilesParallel(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
+  private async parseFilesParallel(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
-  private async parseWithWorkers(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
+  private async parseWithWorkers(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
-  private async parseOnMainThread(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
+  private async parseOnMainThread(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
     const results: ParseResult[] = new Array(files.length);
 
     // Read all files concurrently first (I/O bound, cheap to parallelize)
@@ -710,6 +740,8 @@ export class Scanner {
 
         if (sources[i] === null) {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to read ${relPath}` }] };
+          onFileParsed?.(relPath);
+          await new Promise(resolve => setImmediate(resolve));
           continue;
         }
 
@@ -722,6 +754,8 @@ export class Scanner {
         } catch {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
         }
+        onFileParsed?.(relPath);
+        await new Promise(resolve => setImmediate(resolve));
       }
     };
 
@@ -809,6 +843,8 @@ export class Scanner {
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
+      const isJsOrTs = /\.(js|ts|jsx|tsx|vue)$/.test(sourcePath);
+      if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 
       if (ref.referenceType === 'require') {
@@ -816,7 +852,7 @@ export class Scanner {
       } else if (ref.referenceType === 'import') {
         targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else {
-        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap);
+        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath);
       }
 
       if (targetFile) {
@@ -889,9 +925,13 @@ export class Scanner {
       normalizedTarget,
       normalizedTarget + '/index.js',
       normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.tsx',
+      normalizedTarget + '/index.jsx',
       normalizedTarget + '/index.vue',
       normalizedTarget + '.js',
       normalizedTarget + '.ts',
+      normalizedTarget + '.tsx',
+      normalizedTarget + '.jsx',
       normalizedTarget + '.vue',
     ];
 
@@ -903,9 +943,29 @@ export class Scanner {
     return null;
   }
 
-  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>): string | null {
+  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
+
+    let sourceLang: string | null = null;
+    if (sourcePath) {
+      const langDef = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages());
+      if (langDef) {
+        sourceLang = langDef.name;
+      }
+    }
+
+    const filterMatches = (matches: Record<string, unknown>[]): Record<string, unknown>[] => {
+      if (!sourceLang) return matches;
+      return matches.filter(m => {
+        const targetPath = m.file_path as string;
+        const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
+        const targetLang = targetLangDef ? targetLangDef.name : '';
+        return areLanguagesCompatible(sourceLang!, targetLang);
+      });
+    };
+
     let matches = this.store.searchSymbols(symbolName);
+    matches = filterMatches(matches);
     if (matches.length > 0) {
       const exactMatch = matches.find(m => m.name === symbolName);
       if (exactMatch) return exactMatch.file_path as string;
@@ -915,6 +975,7 @@ export class Scanner {
       const parts = symbolName.split('\\');
       const shortName = parts[parts.length - 1];
       matches = this.store.searchSymbols(shortName);
+      matches = filterMatches(matches);
       if (matches.length > 0) {
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
@@ -927,8 +988,8 @@ export class Scanner {
   }
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
     return excludes.some(p => {
-      if (minimatch(relDir, p, { dot: true })) return true;
-      if (minimatch(relDir + '/**', p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir, p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir + '/**', p, { dot: true })) return true;
       const segments = relDir.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -993,7 +1054,16 @@ export class Scanner {
           const absPath = resolve(workspaceRoot, relPath);
           const content = await readFile(absPath, 'utf-8');
 
-          const routes = await detector.extractRoutes(relPath, content, ctx);
+          const localCtx: ScanContext = {
+            ...ctx,
+            resolveSymbolToFile: (symName: string, sourcePath?: string) => {
+              return sourcePath
+                ? this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath)
+                : ctx.resolveSymbolToFile(symName);
+            }
+          };
+
+          const routes = await detector.extractRoutes(relPath, content, localCtx);
           for (const route of routes) {
             let conf = 1.0;
             const routeConf = route.metadata?.confidence ?? (route as any).confidence;
@@ -1052,7 +1122,7 @@ export class Scanner {
           }
 
           if (detector.extractHooks) {
-            const hooks = await detector.extractHooks(relPath, content, ctx);
+            const hooks = await detector.extractHooks(relPath, content, localCtx);
             for (const hook of hooks) {
               let conf = 1.0;
               const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;

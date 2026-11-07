@@ -22,6 +22,12 @@ const GRAMMARS = [
   { name: 'tree-sitter-vue', files: ['tree-sitter-vue.wasm'] },
   { name: 'tree-sitter-dart', files: ['tree-sitter-dart.wasm'] },
   { name: 'tree-sitter-scala', files: ['tree-sitter-scala.wasm'] },
+  { name: 'tree-sitter-svelte', files: ['tree-sitter-svelte.wasm'] },
+  { name: 'tree-sitter-lua', files: ['tree-sitter-lua.wasm'] },
+  { name: 'tree-sitter-elixir', files: ['tree-sitter-elixir.wasm'] },
+  { name: 'tree-sitter-zig', files: ['tree-sitter-zig.wasm'] },
+  { name: 'tree-sitter-bash', files: ['tree-sitter-bash.wasm'] },
+  { name: 'tree-sitter-pascal', files: ['tree-sitter-pascal.wasm'] },
 ];
 
 async function downloadFile(url: string, destPath: string): Promise<boolean> {
@@ -130,6 +136,15 @@ async function run() {
         }
       }
     }
+  }
+  // Copy web-tree-sitter.wasm
+  const wtsWasmSrc = join(PROJECT_ROOT, 'node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm');
+  const wtsWasmDest = join(WASM_DIR, 'web-tree-sitter.wasm');
+  if (existsSync(wtsWasmSrc)) {
+    execSync(`cp "${wtsWasmSrc}" "${wtsWasmDest}"`, { cwd: PROJECT_ROOT });
+    console.log('  Copied web-tree-sitter.wasm from node_modules');
+  } else {
+    console.log('  Warning: web-tree-sitter.wasm not found in node_modules/web-tree-sitter');
   }
 
   const existing = execSync(`ls -la ${WASM_DIR}`, { encoding: 'utf-8' });

@@ -102,25 +102,44 @@ Outputs:
 
 ## `mapx query <term>`
 
-Search for symbols by name pattern (supports partial matching).
+Search for symbols by name. Supports partial matching, glob patterns (`*Service`, `get*`, `*Controller*`), and wildcard (`*` to list all). When no matches are found, suggests similar symbols via fuzzy matching.
 
 ```bash
 mapx query <term> [--dir /path]
 ```
 
+Examples:
+```bash
+mapx query UserService           # Partial match
+mapx query '*Service'            # Glob: all symbols ending with "Service"
+mapx query 'get*'                # Glob: all symbols starting with "get"
+mapx query '*'                   # List all symbols
+mapx query Stor                  # Typo: fuzzy suggestions → Store, StoreBackend
+```
+
 ## `mapx search <term>`
 
-Advanced filtered search for symbols.
+Advanced filtered search for symbols. Supports the same glob and wildcard patterns as `query`, plus filtering by kind, file prefix, and output format. When a `--kind` filter yields zero results, search automatically retries without the kind filter (auto-expand) and notifies you.
 
 ```bash
-mapx search <term> [--kind <kind>] [--file <prefix>] [--exact] [--limit <n>]
+mapx search <term> [--kind <kind>] [--file <prefix>] [--exact] [--limit <n>] [--format <format>]
 ```
 
 Options:
-- `--kind` — Filter by symbol kind (class, function, method, interface, etc.)
+- `--kind` — Filter by symbol kind (class, function, method, interface, trait, constant, enum, property, namespace, struct, module)
 - `--file` — Filter by file path prefix
-- `--exact` — Exact name match (no partial)
-- `--limit` — Max results (default: 50)
+- `--exact` — Exact name match (case-insensitive, no partial/glob)
+- `--limit` — Max results (default: 20)
+- `--format` — Output format: `text` (default) or `json`
+
+Examples:
+```bash
+mapx search '*' --kind class               # All classes
+mapx search '*Service' --kind class         # Classes ending with "Service"
+mapx search '*' --kind enum                 # All enums (auto-expands if none found)
+mapx search '*' --file src/core/            # All symbols in src/core/
+mapx search User --format json --limit 5    # JSON output
+```
 
 ## `mapx deps <file>`
 
@@ -140,7 +159,7 @@ mapx trace <symbol> [--dir /path] [--depth <n>]
 
 ## `mapx callers <symbol>`
 
-Show direct and nested callers of a symbol.
+Show direct and nested callers of a symbol. If the symbol is not found, suggests similar symbols via fuzzy matching.
 
 ```bash
 mapx callers <symbol> [--dir /path] [--depth <n>]
@@ -148,7 +167,7 @@ mapx callers <symbol> [--dir /path] [--depth <n>]
 
 ## `mapx callees <symbol>`
 
-Show direct and nested callees of a symbol.
+Show direct and nested callees of a symbol. If the symbol is not found, suggests similar symbols via fuzzy matching.
 
 ```bash
 mapx callees <symbol> [--dir /path] [--depth <n>]
@@ -156,22 +175,31 @@ mapx callees <symbol> [--dir /path] [--depth <n>]
 
 ## `mapx impact <symbol>`
 
-Perform change impact analysis — show blast radius and risk for modifying a symbol.
+Perform change impact analysis — show blast radius and risk for modifying a symbol. Validates symbol existence before running analysis; suggests alternatives via fuzzy matching if not found.
 
 ```bash
-mapx impact <symbol> [--dir /path] [--depth <n>]
+mapx impact <symbol> [--dir /path] [--depth <n>] [--format <format>]
 ```
 
 ## `mapx node <symbol>`
 
-Inspect a specific symbol node with detailed metadata. Optionally view its source code.
+Inspect a specific symbol node with detailed metadata. Optionally view its source code. If the symbol is not found, suggests similar symbols via fuzzy matching.
 
 ```bash
-mapx node <symbol> [--dir /path] [--source]
+mapx node <symbol> [--dir /path] [--source] [--format <format>]
 ```
 
 Options:
 - `--source` — Include the source code of the symbol
+- `--format` — Output format: `text` (default) or `json`
+
+Examples:
+```bash
+mapx node Store                         # Text output
+mapx node Store --source                # Text output with source code
+mapx node Store --format json           # JSON output
+mapx node Store --source --format json  # JSON with embedded source
+```
 
 ## `mapx files`
 

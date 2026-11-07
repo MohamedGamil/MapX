@@ -375,3 +375,5 @@ function printReport(results: ScenarioResult[], ctx: ScenarioContext): void {
 // ─── Main ────────────────────────────────────────────────────
 
 runBenchmarks();
+
+// test staleness comment

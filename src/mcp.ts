@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync, readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
@@ -22,11 +22,13 @@ import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateMetrics } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
+import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -136,11 +138,18 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_query',
-        description: 'Search for symbols (classes, functions, methods) by name pattern. Returns definitions with file locations and signatures.',
+        description: `Search symbols by name pattern. Returns definitions with file locations and signatures.
+
+SEARCH MODES:
+  • Substring (default): term="User" matches UserService, UserController, getUser
+  • Glob pattern: term="*Service" or term="get*" (uses * and ? wildcards)
+  • List all: term="*" returns all indexed symbols
+
+Prefer mapx_search for filtered queries (by kind, file path, exact match). Use mapx_query for quick lookups.`,
         inputSchema: {
           type: 'object',
           properties: {
-            term: { type: 'string', description: 'Symbol name or pattern to search for' },
+            term: { type: 'string', description: 'Symbol name, substring, or glob pattern (* and ? supported). Use "*" to list all.' },
             ...dirProperty,
           },
           required: ['term'],
@@ -160,15 +169,28 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_export',
-        description: 'Export a compact, token-efficient summary of the code graph. Use this at the start of a session to quickly understand the codebase structure.',
+        description: `Export a compact, token-efficient summary of the code graph. Use at the start of a session to understand codebase structure without reading files.
+
+FORMATS:
+  • llm (default): PageRank-ranked files with signatures, optimized for LLM context. Use "tokens" to control size.
+  • json: Full graph as JSON (files, symbols, edges)
+  • dot: GraphViz DOT format (use with --cluster auto for grouped rendering)
+  • svg: SVG visualization
+  • toon: TOON compact token-efficient format
+
+EXAMPLES:
+  • Quick overview: { }
+  • Larger context: { "tokens": 16384 }
+  • Full JSON graph: { "format": "json" }
+  • Clustered SVG: { "format": "svg", "cluster": "auto" }`,
         inputSchema: {
           type: 'object',
           properties: {
             format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg', 'toon'], description: 'Output format', default: 'llm' },
-            tokens: { type: 'number', description: 'Token budget for LLM format', default: 8192 },
-            repo: { type: 'string', description: 'Filter by repo name' },
-            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
-            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
+            tokens: { type: 'number', description: 'Token budget for LLM/TOON format', default: 8192 },
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            exclude: { type: 'string', description: 'Comma-separated exclude glob patterns' },
+            include: { type: 'string', description: 'Comma-separated include glob patterns' },
             cluster: { type: 'string', enum: ['none', 'auto'], description: 'Cluster rendering mode for DOT/SVG', default: 'none' },
             depth: { type: 'number', description: 'Maximum cluster nesting depth for DOT/SVG export', default: 3 },
             fallback_grid: { type: 'boolean', description: 'Force using fallback grid SVG export', default: false },
@@ -308,15 +330,35 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_search',
-        description: 'Symbol search with kind/file/exact filters and importance scores.',
+        description: `Search for symbols with filters, glob patterns, and PageRank importance scores.
+
+SEARCH PATTERNS:
+  • Substring (default): term="User" matches UserService, UserController, getUser
+  • Glob pattern: term="*Service" matches UserService, AuthService; term="get*" matches getUser, getData
+  • List all: term="*" lists all symbols (combine with kind/file filters to narrow)
+  • Exact match: exact=true with term="UserService" matches only UserService
+
+All matching is case-insensitive. If no results are found, similar symbol names are suggested.
+
+EXAMPLES:
+  • Find all enums: { "term": "*", "kind": "enum" }
+  • Find services: { "term": "*Service" }
+  • Find all symbols in a directory: { "term": "*", "file": "src/core/" }
+  • Find a specific class: { "term": "UserService", "kind": "class", "exact": true }
+  • Browse all classes: { "term": "*", "kind": "class", "limit": 50 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            term: { type: 'string', description: 'Symbol name or pattern to search for' },
-            kind: { type: 'string', description: 'Filter by symbol kind (e.g. class, method)' },
-            file: { type: 'string', description: 'Filter by file path prefix' },
-            exact: { type: 'boolean', description: 'Only match exact name', default: false },
+            term: { type: 'string', description: 'Symbol name, glob pattern (* and ? wildcards), or "*" to list all. Case-insensitive.' },
+            kind: {
+              type: 'string',
+              enum: ['class', 'method', 'function', 'interface', 'trait', 'constant', 'enum', 'property', 'namespace', 'struct', 'module', 'field'],
+              description: 'Filter by symbol kind (case-insensitive)',
+            },
+            file: { type: 'string', description: 'Filter by file path prefix (e.g. "src/core/" or "apps/dashboard/")' },
+            exact: { type: 'boolean', description: 'Only match exact name (case-insensitive)', default: false },
             limit: { type: 'number', description: 'Max results to return', default: 20 },
+            format: { type: 'string', enum: ['text', 'json'], description: 'Output format. "json" returns structured data.', default: 'text' },
             ...dirProperty,
           },
           required: ['term'],
@@ -324,14 +366,22 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_context',
-        description: 'Smart context builder: graph-expansion + keyword matching + PageRank ranking.',
+        description: `Generate focused, token-budgeted context for a coding task. Expands from seed symbols/files through the dependency graph, ranks by PageRank relevance, and trims to fit token budget.
+
+USE WHEN: Starting a task and you need to understand the relevant code without reading every file.
+ALTERNATIVE: Use mapx_export for a full project overview instead of a task-specific one.
+
+EXAMPLES:
+  • { "task": "refactor the authentication flow" }
+  • { "task": "add rate limiting to API endpoints", "seeds": ["AuthService", "src/middleware/"] }
+  • { "task": "fix payment checkout bug", "tokens": 4096 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            task: { type: 'string', description: 'Task description' },
-            seeds: { type: 'array', items: { type: 'string' }, description: 'Specific symbols or file paths to anchor context' },
-            tokens: { type: 'number', description: 'Token budget', default: 8192 },
-            depth: { type: 'number', description: 'Graph traversal depth', default: 2 },
+            task: { type: 'string', description: 'Natural language description of the coding task' },
+            seeds: { type: 'array', items: { type: 'string' }, description: 'Specific symbols or file paths to anchor the context expansion' },
+            tokens: { type: 'number', description: 'Token budget for output', default: 8192 },
+            depth: { type: 'number', description: 'Graph traversal depth from seeds', default: 2 },
             ...dirProperty,
           },
           required: ['task'],
@@ -339,12 +389,22 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_callers',
-        description: 'Who calls this symbol? (symbol-level, with depth)',
+        description: `Find all callers of a symbol — who calls this function/method/class? Traverses the call graph upstream.
+
+SYMBOL FORMAT: "SymbolName" or "ClassName::methodName" for scoped symbols.
+DEPTH: depth=1 (default) shows direct callers only. depth=2+ shows transitive callers.
+
+If the symbol is not found, similar names are suggested.
+
+EXAMPLES:
+  • { "symbol": "handleRequest" }
+  • { "symbol": "UserService::findAll", "depth": 2 }
+  • { "symbol": "apiFetch", "depth": 3 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            symbol: { type: 'string', description: 'Symbol name' },
-            depth: { type: 'number', description: 'Traversal depth', default: 1 },
+            symbol: { type: 'string', description: 'Symbol name (e.g. "handleRequest") or scoped name (e.g. "UserService::findAll")' },
+            depth: { type: 'number', description: 'Max traversal depth. 1=direct callers, 2+=transitive.', default: 1 },
             ...dirProperty,
           },
           required: ['symbol'],
@@ -352,12 +412,21 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_callees',
-        description: 'What does this symbol call? (symbol-level, with depth)',
+        description: `Find all callees of a symbol — what does this function/method call? Traverses the call graph downstream.
+
+SYMBOL FORMAT: "SymbolName" or "ClassName::methodName" for scoped symbols.
+DEPTH: depth=1 (default) shows direct callees only. depth=2+ shows transitive callees.
+
+If the symbol is not found, similar names are suggested.
+
+EXAMPLES:
+  • { "symbol": "handleRequest" }
+  • { "symbol": "UserService::create", "depth": 2 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            symbol: { type: 'string', description: 'Symbol name' },
-            depth: { type: 'number', description: 'Traversal depth', default: 1 },
+            symbol: { type: 'string', description: 'Symbol name (e.g. "handleRequest") or scoped name (e.g. "UserService::create")' },
+            depth: { type: 'number', description: 'Max traversal depth. 1=direct callees, 2+=transitive.', default: 1 },
             ...dirProperty,
           },
           required: ['symbol'],
@@ -365,12 +434,20 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_impact',
-        description: 'Transitive blast-radius of changing a symbol with risk scoring.',
+        description: `Analyze the blast radius of changing a symbol. Returns risk-scored list of affected callers at each depth level (HIGH/MEDIUM/LOW).
+
+USE BEFORE: Modifying any function, class, or method to understand what might break.
+If the symbol is not found, similar names are suggested.
+
+EXAMPLES:
+  • { "symbol": "UserService" }
+  • { "symbol": "apiFetch", "depth": 4 }
+  • { "symbol": "DatabasePool::getConnection" }`,
         inputSchema: {
           type: 'object',
           properties: {
-            symbol: { type: 'string', description: 'Symbol name' },
-            depth: { type: 'number', description: 'Traversal depth', default: 3 },
+            symbol: { type: 'string', description: 'Symbol name or scoped name (e.g. "ClassName::method")' },
+            depth: { type: 'number', description: 'Max traversal depth for impact analysis', default: 3 },
             ...dirProperty,
           },
           required: ['symbol'],
@@ -378,12 +455,24 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_node',
-        description: 'Full symbol details + optional source code extraction.',
+        description: `Inspect a specific symbol: kind, file location, signature, caller/callee counts, and optionally its source code.
+
+USE WHEN: You know the exact symbol name and want details or source code.
+USE mapx_search INSTEAD WHEN: You only have a partial name or want to browse symbols.
+
+SYMBOL FORMAT: "SymbolName" or "ClassName::methodName" (scope::name)
+If the symbol is not found, similar names are suggested.
+
+EXAMPLES:
+  • { "symbol": "UserService" }
+  • { "symbol": "UserService::findAll", "source": true }
+  • { "symbol": "handleRequest", "source": true }`,
         inputSchema: {
           type: 'object',
           properties: {
-            symbol: { type: 'string', description: 'Symbol name' },
-            source: { type: 'boolean', description: 'Extract and display source code', default: false },
+            symbol: { type: 'string', description: 'Symbol name (e.g. "UserService") or scoped name (e.g. "UserService::findAll")' },
+            source: { type: 'boolean', description: 'Include the symbol\'s source code in the response', default: false },
+            format: { type: 'string', enum: ['text', 'json'], description: 'Output format', default: 'text' },
             ...dirProperty,
           },
           required: ['symbol'],
@@ -391,13 +480,19 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_files',
-        description: 'Indexed file list with path/language/sort filters.',
+        description: `List indexed project files with optional filters. Faster than filesystem listing since it uses the pre-built index.
+
+EXAMPLES:
+  • List all files: { }
+  • Files in a directory: { "path": "src/core/" }
+  • Only TypeScript files: { "lang": "typescript" }
+  • Largest files first: { "sort": "lines", "limit": 20 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Filter by path prefix' },
-            lang: { type: 'string', description: 'Filter by language' },
-            sort: { type: 'string', enum: ['lines', 'path'], description: 'Sort field', default: 'path' },
+            path: { type: 'string', description: 'Filter by path prefix (e.g. "src/core/" or "apps/dashboard/")' },
+            lang: { type: 'string', description: 'Filter by language (e.g. "typescript", "python", "go")' },
+            sort: { type: 'string', enum: ['lines', 'path'], description: 'Sort by line count (desc) or path (asc)', default: 'path' },
             limit: { type: 'number', description: 'Max files to return', default: 50 },
             ...dirProperty,
           },
@@ -447,6 +542,51 @@ export function buildServer(options?: ServeOptions): Server {
             },
             ...dirProperty,
           },
+        },
+      },
+      {
+        name: 'mapx_batch',
+        description: `Execute multiple mapx queries in a single call. Reduces round-trips when you need to look up several symbols, check multiple files, or combine search + node inspection.
+
+SUPPORTED OPERATIONS:
+  • search: { "op": "search", "term": "...", "kind": "..." }
+  • node: { "op": "node", "symbol": "...", "source": true }
+  • callers: { "op": "callers", "symbol": "...", "depth": 2 }
+  • callees: { "op": "callees", "symbol": "...", "depth": 2 }
+  • deps: { "op": "deps", "file": "..." }
+
+EXAMPLE:
+  { "operations": [
+    { "op": "search", "term": "UserService", "kind": "class" },
+    { "op": "node", "symbol": "UserService", "source": true },
+    { "op": "callers", "symbol": "UserService::findAll" }
+  ]}`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            operations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  op: { type: 'string', enum: ['search', 'node', 'callers', 'callees', 'deps'], description: 'Operation type' },
+                  term: { type: 'string', description: 'Search term (for search op)' },
+                  symbol: { type: 'string', description: 'Symbol name (for node/callers/callees ops)' },
+                  file: { type: 'string', description: 'File path (for deps op)' },
+                  kind: { type: 'string', description: 'Symbol kind filter (for search op)' },
+                  source: { type: 'boolean', description: 'Include source code (for node op)' },
+                  depth: { type: 'number', description: 'Traversal depth (for callers/callees ops)' },
+                  limit: { type: 'number', description: 'Max results (for search op)' },
+                  exact: { type: 'boolean', description: 'Exact match (for search op)' },
+                },
+                required: ['op'],
+              },
+              description: 'Array of operations to execute',
+            },
+            maxItems: { type: 'number', description: 'Override default batch size limit (default: 10)', default: 10 },
+            ...dirProperty,
+          },
+          required: ['operations'],
         },
       },
     ],
@@ -554,15 +694,25 @@ export function buildServer(options?: ServeOptions): Server {
 
         const results = ctx.store.searchSymbols(term);
         if (results.length === 0) {
-          return { content: [{ type: 'text', text: `No symbols matching "${term}" in ${dir}` }] };
+          // Fuzzy fallback: suggest similar symbol names
+          const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(term, candidates);
+          let msg = `No symbols matching "${term}" in ${dir}`;
+          if (suggestions.length > 0) {
+            msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
+          }
+          msg += `\n\nTip: Use mapx_search for filtered queries. Example: { "term": "${term.length > 3 ? term.slice(0, 4) : term}*", "kind": "class" }`;
+          return { content: [{ type: 'text', text: msg }] };
         }
 
+        const header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n\n`;
         const lines = results.map(sym => {
           const scope = sym.scope ? `${sym.scope}::` : '';
           return `${sym.kind} ${scope}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
         });
 
-        return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + header + lines.join('\n\n') }] };
       }
 
       case 'mapx_dependencies': {
@@ -589,7 +739,8 @@ export function buildServer(options?: ServeOptions): Server {
         }
         if (parts.length === 0) parts.push('No dependencies found');
 
-        return { content: [{ type: 'text', text: parts.join('\n') }] };
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + parts.join('\n') }] };
       }
 
       case 'mapx_export': {
@@ -716,28 +867,74 @@ Recommendation:
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
         const term = (args as any)?.term;
-        if (!term) return { content: [{ type: 'text', text: 'Missing required parameter: term' }] };
+        if (term === undefined || term === null) return { content: [{ type: 'text', text: 'Missing required parameter: term' }] };
 
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const results = ctx.store.searchSymbolsFiltered({
-          term,
-          kind: (args as any)?.kind,
-          filePrefix: (args as any)?.file,
-          exact: !!(args as any)?.exact,
-          limit: (args as any)?.limit,
-        });
+        const kind = (args as any)?.kind as string | undefined;
+        const filePrefix = (args as any)?.file as string | undefined;
+        const exact = !!(args as any)?.exact;
+        const limit = (args as any)?.limit as number | undefined;
+        const format = ((args as any)?.format || 'text') as string;
 
-        if (results.length === 0) {
-          return { content: [{ type: 'text', text: `No symbols matching "${term}"` }] };
+        let results = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
+        let broadened = false;
+
+        // F44: Auto-expand — if kind filter yields 0 results, retry without kind
+        if (results.length === 0 && kind && term !== '*' && term !== '') {
+          const withoutKind = ctx.store.searchSymbolsFiltered({ term, filePrefix, exact, limit });
+          if (withoutKind.length > 0) {
+            results = withoutKind;
+            broadened = true;
+          }
         }
 
+        // F41: Fuzzy fallback — suggest similar names when nothing matches
+        if (results.length === 0 && term !== '*' && term !== '') {
+          const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(term, candidates);
+          let msg = `No symbols matching "${term}"`;
+          if (kind) {
+            const kinds = ctx.store.listSymbolKinds();
+            msg += ` with kind="${kind}".\n\nAvailable kinds:\n${kinds.map(k => `  ${k.kind}: ${k.count} symbols`).join('\n')}`;
+          }
+          if (suggestions.length > 0) {
+            msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
+          }
+          msg += `\n\nTip: Use term="*" to list all symbols, or glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*"`;
+          return { content: [{ type: 'text', text: msg }] };
+        }
+
+        // PageRank enrichment
         const rankedAll = ctx.graph.getRankedSymbols();
         const rankMap = new Map<string, number>();
         for (const item of rankedAll) {
           rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
         }
+
+        // F43: JSON format support
+        if (format === 'json') {
+          const jsonResults = results.map(sym => ({
+            name: sym.name,
+            kind: sym.kind,
+            scope: sym.scope || null,
+            file: sym.file_path,
+            line: sym.start_line,
+            endLine: sym.end_line,
+            signature: sym.signature || '',
+            pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
+          }));
+          const warning = getMcpStalenessWarning(ctx.store, dir);
+          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
+        }
+
+        // F43: Summary header
+        let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        if (kind && !broadened) header += ` of kind "${kind}"`;
+        if (filePrefix) header += ` in ${filePrefix}`;
+        if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
+        header += `:\n\n`;
 
         const lines = results.map(sym => {
           const scope = sym.scope ? `${sym.scope}::` : '';
@@ -746,7 +943,8 @@ Recommendation:
           return `${sym.kind} ${scope}${sym.name} [pagerank: ${pagerankVal.toFixed(6)}]\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
         });
 
-        return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + header + lines.join('\n\n') }] };
       }
 
       case 'mapx_context': {
@@ -856,6 +1054,17 @@ Recommendation:
         }
 
         if (results.length === 0) {
+          // F41: Check if symbol exists at all, provide fuzzy suggestions if not
+          const sym = ctx.store.getSymbolByName(symbolName);
+          if (!sym) {
+            const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+            const suggestions = findSimilarSymbols(symbolName, candidates);
+            let msg = `Symbol "${symbolName}" not found.`;
+            if (suggestions.length > 0) {
+              msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
+            }
+            return { content: [{ type: 'text', text: msg }] };
+          }
           return { content: [{ type: 'text', text: `No callers found for "${symbolName}"` }] };
         }
 
@@ -864,7 +1073,9 @@ Recommendation:
           return `${indent}← ${res.caller} (calls ${res.callee})\n${indent}  @ ${res.file}:${res.line}`;
         });
 
-        return { content: [{ type: 'text', text: `Callers of "${symbolName}":\n` + lines.join('\n') }] };
+        const header = `${results.length} caller${results.length !== 1 ? 's' : ''} of "${symbolName}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:\n`;
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + header + lines.join('\n') }] };
       }
 
       case 'mapx_callees': {
@@ -908,6 +1119,17 @@ Recommendation:
         }
 
         if (results.length === 0) {
+          // F41: Check if symbol exists, provide fuzzy suggestions if not
+          const sym = ctx.store.getSymbolByName(symbolName);
+          if (!sym) {
+            const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+            const suggestions = findSimilarSymbols(symbolName, candidates);
+            let msg = `Symbol "${symbolName}" not found.`;
+            if (suggestions.length > 0) {
+              msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
+            }
+            return { content: [{ type: 'text', text: msg }] };
+          }
           return { content: [{ type: 'text', text: `No callees found for "${symbolName}"` }] };
         }
 
@@ -916,7 +1138,9 @@ Recommendation:
           return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}:${res.line}`;
         });
 
-        return { content: [{ type: 'text', text: `Callees of "${symbolName}":\n` + lines.join('\n') }] };
+        const header = `${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbolName}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:\n`;
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + header + lines.join('\n') }] };
       }
 
       case 'mapx_impact': {
@@ -930,65 +1154,24 @@ Recommendation:
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const maxDepth = (args as any)?.depth ?? 3;
-        const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
-        const visited = new Set<string>([symbolName]);
-        const items: Array<{ symbol: string; file: string; depth: number; edgeType: string; risk: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+        const analyzer = new ImpactAnalyzer(ctx.store);
 
-        while (queue.length > 0) {
-          const { symName, depth } = queue.shift()!;
-          if (depth >= maxDepth) continue;
-
-          const callers = ctx.store.getCallersOfSymbol(symName);
-          for (const edge of callers) {
-            const callerName = edge.source_symbol || '<top-level>';
-            const key = `${edge.source_file}::${callerName}`;
-            if (visited.has(key)) continue;
-            visited.add(key);
-
-            let risk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-            const isStructural = ['import', 'require', 'extends', 'implements'].includes(edge.edge_type);
-            const curDepth = depth + 1;
-
-            if (curDepth === 1) {
-              risk = isStructural ? 'MEDIUM' : 'HIGH';
-            } else if (curDepth === 2) {
-              risk = isStructural ? 'LOW' : 'MEDIUM';
-            } else {
-              risk = 'LOW';
-            }
-
-            items.push({
-              symbol: callerName,
-              file: edge.source_file,
-              depth: curDepth,
-              edgeType: edge.edge_type,
-              risk
-            });
-
-            if (edge.source_symbol) {
-              queue.push({ symName: edge.source_symbol, depth: curDepth });
-            }
+        // F41: Check symbol exists first
+        const sym = ctx.store.getSymbolByName(symbolName);
+        if (!sym) {
+          const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbolName, candidates);
+          let msg = `Symbol "${symbolName}" not found.`;
+          if (suggestions.length > 0) {
+            msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
           }
+          return { content: [{ type: 'text', text: msg }] };
         }
 
-        let recommendation = 'No callers found — safe to change';
-        if (items.some(x => x.risk === 'HIGH')) {
-          recommendation = 'Treat as BREAKING CHANGE — update all HIGH-risk callers';
-        } else if (items.length > 0) {
-          recommendation = 'Low blast radius — proceed with caution';
-        }
+        const result = analyzer.analyze(symbolName, maxDepth, dir);
 
-        const outJson = {
-          affected: items,
-          summary: {
-            high: items.filter(x => x.risk === 'HIGH').length,
-            medium: items.filter(x => x.risk === 'MEDIUM').length,
-            low: items.filter(x => x.risk === 'LOW').length,
-          },
-          recommendation
-        };
-
-        return { content: [{ type: 'text', text: JSON.stringify(outJson, null, 2) }] };
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + JSON.stringify(result, null, 2) }] };
       }
 
       case 'mapx_node': {
@@ -1003,11 +1186,49 @@ Recommendation:
 
         const sym = ctx.store.getSymbolByName(symbolName);
         if (!sym) {
-          return { content: [{ type: 'text', text: `Error: Symbol "${symbolName}" not found.` }] };
+          // F41: Fuzzy suggestions when symbol not found
+          const candidates = ctx.store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbolName, candidates);
+          let msg = `Symbol "${symbolName}" not found.`;
+          if (suggestions.length > 0) {
+            msg += `\n\nDid you mean:\n${suggestions.map(s => `  • ${s.name} (${s.kind} @ ${s.filePath})`).join('\n')}`;
+          }
+          msg += `\n\nTip: Use mapx_search to find symbols by pattern. Example: { "term": "${symbolName.length > 3 ? symbolName.slice(0, 4) : symbolName}*" }`;
+          return { content: [{ type: 'text', text: msg }] };
         }
 
         const callers = ctx.store.getCallersOfSymbol(symbolName);
         const callees = ctx.store.getCalleesOfSymbol(symbolName);
+        const format = ((args as any)?.format || 'text') as string;
+
+        // F43: JSON format
+        if (format === 'json') {
+          const result: Record<string, any> = {
+            name: sym.name,
+            kind: sym.kind,
+            scope: sym.scope || null,
+            file: sym.file_path,
+            startLine: sym.start_line,
+            endLine: sym.end_line,
+            signature: sym.signature || '',
+            callerCount: callers.length,
+            calleeCount: callees.length,
+          };
+          if ((args as any)?.source) {
+            try {
+              const absolutePath = resolve(dir, sym.file_path as string);
+              const content = readFileSync(absolutePath, 'utf8');
+              const lines = content.split('\n');
+              const start = (sym.start_line as number) - 1;
+              const end = (sym.end_line as number);
+              result.source = lines.slice(start, end).join('\n');
+            } catch (err: any) {
+              result.sourceError = err.message;
+            }
+          }
+          const warning = getMcpStalenessWarning(ctx.store, dir);
+          return { content: [{ type: 'text', text: warning + JSON.stringify(result, null, 2) }] };
+        }
 
         let outputText = `Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}
 Kind:   ${sym.kind}
@@ -1019,7 +1240,6 @@ Callees: ${callees.length}`;
 
         if ((args as any)?.source) {
           try {
-            const { readFileSync } = await import('node:fs');
             const absolutePath = resolve(dir, sym.file_path as string);
             const content = readFileSync(absolutePath, 'utf8');
             const lines = content.split('\n');
@@ -1032,7 +1252,41 @@ Callees: ${callees.length}`;
           }
         }
 
-        return { content: [{ type: 'text', text: outputText }] };
+        // F44: Related symbols sidebar — saves follow-up calls
+        const relatedParts: string[] = [];
+
+        // Top callers (up to 3)
+        if (callers.length > 0) {
+          const topCallers = callers.slice(0, 3).map((e: any) => {
+            const name = e.source_symbol || '<top-level>';
+            return `  ← ${name} @ ${e.source_file}`;
+          });
+          relatedParts.push(`Top callers:\n${topCallers.join('\n')}`);
+        }
+
+        // Top callees (up to 3)
+        if (callees.length > 0) {
+          const topCallees = callees.slice(0, 3).map((e: any) => {
+            const name = e.target_symbol || '<unknown>';
+            return `  → ${name} @ ${e.target_file}`;
+          });
+          relatedParts.push(`Top callees:\n${topCallees.join('\n')}`);
+        }
+
+        // Siblings in same file (other symbols, up to 5)
+        const siblings = ctx.store.getSymbolsForFile(sym.file_path as string)
+          .filter((s: any) => s.name !== sym.name)
+          .slice(0, 5);
+        if (siblings.length > 0) {
+          relatedParts.push(`Other symbols in same file:\n${siblings.map((s: any) => `  ${s.kind} ${s.name} (L${s.start_line})`).join('\n')}`);
+        }
+
+        if (relatedParts.length > 0) {
+          outputText += `\n\n── Related ──\n${relatedParts.join('\n\n')}`;
+        }
+
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + outputText }] };
       }
 
       case 'mapx_files': {
@@ -1042,9 +1296,11 @@ Callees: ${callees.length}`;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
+        const pathPrefix = (args as any)?.path;
+        const lang = (args as any)?.lang;
         const results = ctx.store.getFilesFiltered({
-          pathPrefix: (args as any)?.path,
-          lang: (args as any)?.lang,
+          pathPrefix,
+          lang,
           sort: (args as any)?.sort,
           limit: (args as any)?.limit,
         });
@@ -1053,8 +1309,15 @@ Callees: ${callees.length}`;
           return { content: [{ type: 'text', text: 'No files found matching filters.' }] };
         }
 
+        // F43: Summary header
+        let header = `${results.length} file${results.length !== 1 ? 's' : ''}`;
+        if (pathPrefix) header += ` under ${pathPrefix}`;
+        if (lang) header += ` (${lang})`;
+        header += `:\n\n`;
+
         const outText = results.map(f => `  ${f.path} (${f.language}, ${f.lines} lines, ${f.size_bytes} bytes)`).join('\n');
-        return { content: [{ type: 'text', text: outText }] };
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+        return { content: [{ type: 'text', text: warning + header + outText }] };
       }
 
       case 'mapx_metrics': {
@@ -1088,10 +1351,11 @@ Callees: ${callees.length}`;
           lines.push(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
         }
 
+        const warning = getMcpStalenessWarning(ctx.store, dir);
         return {
           content: [{
             type: 'text',
-            text: lines.join('\n'),
+            text: warning + lines.join('\n'),
           }],
         };
       }
@@ -1126,10 +1390,11 @@ Callees: ${callees.length}`;
           lines.push(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
         }
 
+        const warning = getMcpStalenessWarning(ctx.store, dir);
         return {
           content: [{
             type: 'text',
-            text: lines.join('\n'),
+            text: warning + lines.join('\n'),
           }],
         };
       }
@@ -1420,6 +1685,10 @@ Callees: ${callees.length}`;
           lines.push(`Sinks: ${sinkNames.join(', ')}`);
         }
 
+        if (format === 'text') {
+          const warning = getMcpStalenessWarning(ctx.store, dir);
+          return { content: [{ type: 'text', text: warning + lines.join('\n') }] };
+        }
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
@@ -1462,7 +1731,7 @@ Callees: ${callees.length}`;
         const lines = [`Terminal consumers (data sinks) — ${sinks.length} found:`];
         for (const s of sinks) {
           const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [
-            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route'
+            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
           ].includes(e.edge_type as string));
           let extra = `[terminal — no outgoing data edges]`;
           if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
@@ -1679,6 +1948,123 @@ Callees: ${callees.length}`;
         };
       }
 
+      case 'mapx_batch': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const operations = (args as any)?.operations;
+        if (!operations || !Array.isArray(operations) || operations.length === 0) {
+          return { content: [{ type: 'text', text: 'Missing or empty "operations" array.' }] };
+        }
+
+        const maxItems = (args as any)?.maxItems ?? 10;
+        if (operations.length > maxItems) {
+          return { content: [{ type: 'text', text: `Too many operations: ${operations.length}. Maximum is ${maxItems}. Set maxItems to increase.` }] };
+        }
+
+        const sections: string[] = [];
+        const warning = getMcpStalenessWarning(ctx.store, dir);
+
+        for (let i = 0; i < operations.length; i++) {
+          const op = operations[i];
+          const opLabel = `── Operation ${i + 1}: ${op.op} ──`;
+
+          try {
+            switch (op.op) {
+              case 'search': {
+                const results = ctx.store.searchSymbolsFiltered({
+                  term: op.term || '*',
+                  kind: op.kind,
+                  filePrefix: op.file,
+                  exact: !!op.exact,
+                  limit: op.limit,
+                });
+                if (results.length === 0) {
+                  sections.push(`${opLabel}\nNo symbols matching "${op.term || '*'}"`);
+                } else {
+                  const lines = results.map((sym: any) =>
+                    `  ${sym.kind} ${sym.scope ? `${sym.scope}::` : ''}${sym.name} @ ${sym.file_path}:${sym.start_line}`
+                  );
+                  sections.push(`${opLabel}\nFound ${results.length} symbol${results.length !== 1 ? 's' : ''}:\n${lines.join('\n')}`);
+                }
+                break;
+              }
+              case 'node': {
+                const sym = ctx.store.getSymbolByName(op.symbol);
+                if (!sym) {
+                  sections.push(`${opLabel}\nSymbol "${op.symbol}" not found.`);
+                } else {
+                  let text = `${opLabel}\n${sym.kind} ${sym.scope ? `${sym.scope}::` : ''}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}-${sym.end_line}\n  signature: ${sym.signature}`;
+                  if (op.source) {
+                    try {
+                      const absolutePath = resolve(dir, sym.file_path as string);
+                      const content = readFileSync(absolutePath, 'utf8');
+                      const srcLines = content.split('\n');
+                      const start = (sym.start_line as number) - 1;
+                      const end = (sym.end_line as number);
+                      text += `\n\n${srcLines.slice(start, end).join('\n')}`;
+                    } catch { /* skip source on error */ }
+                  }
+                  sections.push(text);
+                }
+                break;
+              }
+              case 'callers': {
+                const callerEdges = ctx.store.getCallersOfSymbol(op.symbol);
+                if (callerEdges.length === 0) {
+                  sections.push(`${opLabel}\nNo callers found for "${op.symbol}"`);
+                } else {
+                  const lines = callerEdges.map((e: any) =>
+                    `  ← ${e.source_symbol || '<top-level>'} @ ${e.source_file}`
+                  );
+                  sections.push(`${opLabel}\n${callerEdges.length} caller(s) of "${op.symbol}":\n${lines.join('\n')}`);
+                }
+                break;
+              }
+              case 'callees': {
+                const calleeEdges = ctx.store.getCalleesOfSymbol(op.symbol);
+                if (calleeEdges.length === 0) {
+                  sections.push(`${opLabel}\nNo callees found for "${op.symbol}"`);
+                } else {
+                  const lines = calleeEdges.map((e: any) =>
+                    `  → ${e.target_symbol || '<unknown>'} @ ${e.target_file}`
+                  );
+                  sections.push(`${opLabel}\n${calleeEdges.length} callee(s) of "${op.symbol}":\n${lines.join('\n')}`);
+                }
+                break;
+              }
+              case 'deps': {
+                const deps = ctx.graph.getDependencies(op.file);
+                const rdeps = ctx.graph.getReverseDependencies(op.file);
+                const parts: string[] = [`${opLabel}`];
+                if (deps.length > 0) {
+                  parts.push(`Dependencies (${deps.length}):`);
+                  for (const d of deps) parts.push(`  → ${d.target} (${d.type})`);
+                }
+                if (rdeps.length > 0) {
+                  parts.push(`Depended on by (${rdeps.length}):`);
+                  for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
+                }
+                if (deps.length === 0 && rdeps.length === 0) {
+                  parts.push(`No dependencies found for "${op.file}"`);
+                }
+                sections.push(parts.join('\n'));
+                break;
+              }
+              default:
+                sections.push(`${opLabel}\nUnknown operation: "${op.op}". Supported: search, node, callers, callees, deps`);
+            }
+          } catch (err: any) {
+            sections.push(`${opLabel}\nError: ${err.message}`);
+          }
+        }
+
+        return { content: [{ type: 'text', text: warning + sections.join('\n\n') }] };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -1893,3 +2279,69 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
     console.error(generateConfigs(defaultDir!, 'stdio'));
   }
 }
+
+export function getStaleFilesCount(store: Store, dir: string): number {
+  try {
+    const files = store.getAllFiles();
+    let changedCount = 0;
+    for (const file of files) {
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) {
+          changedCount++;
+        }
+      } else {
+        changedCount++;
+      }
+    }
+    return changedCount;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Get names of stale files (up to a limit).
+ * Used for F44 enhanced staleness warnings.
+ */
+export function getStaleFileNames(store: Store, dir: string, maxFiles: number = 5): string[] {
+  try {
+    const files = store.getAllFiles();
+    const changed: string[] = [];
+    for (const file of files) {
+      if (changed.length >= maxFiles) break;
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) {
+          changed.push(file.path as string);
+        }
+      } else {
+        changed.push(`${file.path} (deleted)`);
+      }
+    }
+    return changed;
+  } catch {
+    return [];
+  }
+}
+
+export function getMcpStalenessWarning(store: Store, dir: string): string {
+  const staleCount = getStaleFilesCount(store, dir);
+  if (staleCount > 0) {
+    const staleFiles = getStaleFileNames(store, dir);
+    const fileList = staleFiles.length > 0
+      ? `\nChanged: ${staleFiles.join(', ')}${staleCount > staleFiles.length ? ` (and ${staleCount - staleFiles.length} more)` : ''}`
+      : '';
+    return `⚠️  Index is stale (${staleCount} file${staleCount !== 1 ? 's' : ''} changed since last scan). Run mapx_sync to update.${fileList}\n\n`;
+  }
+  return '';
+}
+
+export function checkTryCatch(content: string, lineNum: number, startLine: number, isPython: boolean): boolean {
+  return coreCheckTryCatch(content, lineNum, startLine, isPython);
+}
+

@@ -475,3 +475,125 @@ _None yet._
 ### Blockers / notes
 
 No blockers. All tree-sitter grammars are available. The `GenericWasmParser` already handles `symbol.kind_*` and `ref.target_*` capture names generically — no parser code changes needed.
+
+---
+
+## I18 — React & TSX Parser Fixes
+
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
+| Features | F34 |
+| Branch | `feat/i18-react-tsx-parser-fixes` |
+| PR | — |
+
+### Scope
+
+Fixes critical gaps in TS/TSX indexing. Updates the TypeScript parser to support and extract default class/function exports and anonymous arrow exports (which will be named automatically based on the filename). Fixes files walk and cache syncing where `.tsx` files were ignored.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Prerequisite for React graph analysis and JSX rendering dependencies.
+
+---
+
+## I19 — JSX Render Edges
+
+| Field | Value |
+|-------|-------|
+| Status | done |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
+| Features | F35 |
+| Branch | feat/i19-jsx-render-edges |
+| PR | — |
+
+### Scope
+
+Extends TS/TSX parser AST queries to capture JSX element usage (e.g., `<LinksPage />`). Map these elements to class/function symbol names in the graph, establishing rendering dependency edges (labeled as `render` or `call`) to model component hierarchy.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Requires I18 to be complete so that components are successfully indexed.
+
+---
+
+## I20 — NestJS Routes, Hooks, & DI Parsing
+
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
+| Features | F36 |
+| Branch | `feat/i20-nestjs-decorators` |
+| PR | — |
+
+### Scope
+
+Parses NestJS backend decorator conventions. Detects routing endpoints (`@Controller`, `@Get`, `@Post`, etc.) and GraphQL resolvers (`@Resolver`, `@Query`, `@Mutation`). Captures dependency injection setups by tracking constructor parameter type declarations, creating type dependency edges. Extracts implementation of NestJS lifecycle hooks.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Independent of frontend React work, but requires I17 syntax coverage foundations.
+
+---
+
+## I21 — Graph Resolution & Noise Reduction
+
+| Field | Value |
+|-------|-------|
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
+| Features | F37 |
+| Branch | `feat/i21-graph-resolution-noise` |
+| PR | — |
+
+### Scope
+
+Removes noise and pollution from the dependency graph. Adds built-in JavaScript/TypeScript globals (`Date`, `Error`, `Map`, `Set`, `Promise`, etc.) to a resolution blacklist, preventing false edges. Filters import-level `<top-level>` reference entries from the call graph. Adds risk categories (HIGH, MEDIUM, LOW) to change impact analyses based on calling depth and try/catch blocks. Triggers staleness warning headers on CLI/MCP query outputs when file changes are detected on disk.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Improves reliability and clarity of `mapx callers`, `mapx trace`, and `mapx impact`.
+
+---
+
+## I22 — CLI/MCP Search & Context Usability
+ 
+| Field | Value |
+|-------|-------|
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
+| Features | F38 |
+| Branch | `feat/i22-mcp-usability` |
+| PR | — |
+
+### Scope
+
+Improves the developer and agent interface. Supports wildcard `*` or empty search terms in `mapx_search` to list all symbols in a file. Standardizes search `kind` parameters case-insensitively. Optimizes the context builder scoring and documents the required `task` parameter. Creates an explicit `instructions.md` guide for the MCP server. Appends file-level role heuristics to LLM summaries.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Requires no database migrations or structural graph modifications.
+

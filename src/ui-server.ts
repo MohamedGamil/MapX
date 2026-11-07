@@ -2,6 +2,8 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { readFileSync, existsSync, statSync, watchFile, unwatchFile } from 'node:fs';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createGzip } from 'node:zlib';
+import { pipeline } from 'node:stream';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
@@ -118,7 +120,7 @@ export function startUiServer(opts: ServerOpts) {
     }
 
     // Handle Rate Limiting for specific endpoints
-    if (pathname === '/api/context' || pathname === '/api/graph') {
+    if (pathname === '/api/context' || pathname === '/api/graph' || pathname === '/api/graph/meta') {
       if (isRateLimited(ip)) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Rate limit exceeded: max 10 requests per minute' }));
@@ -159,13 +161,64 @@ export function startUiServer(opts: ServerOpts) {
         return;
       }
 
+      if (pathname === '/api/graph/meta') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const totalFiles = store.getFileCount();
+          const totalEdges = store.getEdgeCount();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ totalFiles, totalEdges, totalElements: totalFiles + totalEdges }));
+        } finally {
+          store.close();
+        }
+        return;
+      }
+
       if (pathname === '/api/graph') {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          // --- Build MapxGraph and compute PageRank ---
+          const config = await Config.load(dir);
+          const graph = new MapxGraph(config.repo.name);
+
           const files = store.getAllFiles();
+          const allSymbols = store.getAllSymbols();
           const edges = store.getAllEdges();
 
+          for (const file of files) {
+            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
+          }
+          for (const sym of allSymbols) {
+            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
+          }
+          for (const edge of edges) {
+            graph.addDependencyEdge({
+              sourceFile: edge.source_file as string,
+              targetFile: edge.target_file as string,
+              sourceSymbol: edge.source_symbol as string | null,
+              targetSymbol: edge.target_symbol as string | null,
+              edgeType: edge.edge_type as any,
+              repo: edge.repo as string,
+              weight: edge.weight as number,
+              verifiability: edge.verifiability as any,
+              targetRepo: edge.target_repo as string | null,
+            });
+          }
+
+          const pageRankScores = graph.computePageRank();
+
+          // --- Symbol counts per file via SQL aggregate ---
+          const symbolCountRows = store.raw.prepare(
+            'SELECT file_path, COUNT(*) as cnt FROM symbols GROUP BY file_path'
+          ).all() as Array<{ file_path: string; cnt: number }>;
+          const symbolCountMap = new Map<string, number>();
+          for (const row of symbolCountRows) {
+            symbolCountMap.set(row.file_path, row.cnt);
+          }
+
+          // --- Build elements array ---
           const elements: any[] = [];
           for (const f of files) {
             const fPath = f.path as string;
@@ -176,7 +229,9 @@ export function startUiServer(opts: ServerOpts) {
                 type: 'file',
                 language: f.language,
                 size: f.size_bytes,
-                lines: f.lines
+                lines: f.lines,
+                symbolCount: symbolCountMap.get(fPath) || 0,
+                pagerank: pageRankScores.get(fPath) || 0
               }
             });
           }
@@ -187,20 +242,68 @@ export function startUiServer(opts: ServerOpts) {
                 source: e.source_file,
                 target: e.target_file,
                 type: e.edge_type,
-                verifiability: e.verifiability
+                verifiability: e.verifiability,
+                weight: e.weight
               }
             });
           }
 
-          const payload = JSON.stringify(elements);
-          if (payload.length > 10 * 1024 * 1024) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Graph too large (exceeded 10MB limit)' }));
-            return;
+          // --- Pagination support ---
+          const limitParam = parsedUrl.searchParams.get('limit');
+          const offsetParam = parsedUrl.searchParams.get('offset');
+          const usePagination = limitParam !== null || offsetParam !== null;
+
+          let responseBody: any;
+          if (usePagination) {
+            const total = elements.length;
+            const limit = Math.max(1, parseInt(limitParam || String(total), 10));
+            const offset = Math.max(0, parseInt(offsetParam || '0', 10));
+            const paginatedElements = elements.slice(offset, offset + limit);
+            responseBody = { elements: paginatedElements, meta: { total, limit, offset } };
+          } else {
+            responseBody = elements;
           }
 
+          const payload = JSON.stringify(responseBody);
+
+          // --- Gzip compression for large responses ---
+          const acceptEncoding = req.headers['accept-encoding'] || '';
+          const clientAcceptsGzip = typeof acceptEncoding === 'string' && acceptEncoding.includes('gzip');
+
+          if (payload.length > 1 * 1024 * 1024 && clientAcceptsGzip) {
+            res.writeHead(200, {
+              'Content-Type': 'application/json',
+              'Content-Encoding': 'gzip',
+              'Transfer-Encoding': 'chunked'
+            });
+            const { Readable } = require('node:stream');
+            const source = Readable.from([payload]);
+            const gzip = createGzip();
+            pipeline(source, gzip, res, (err: any) => {
+              if (err && !res.destroyed) {
+                res.end();
+              }
+            });
+          } else {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(payload);
+          }
+        } finally {
+          store.close();
+        }
+        return;
+      }
+
+      if (pathname === '/api/clusters') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const config = await Config.load(dir);
+          const repo = config.repo.name;
+          const clusters = store.getClusters(repo);
+          const memberships = store.getClusterMemberships(repo);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(payload);
+          res.end(JSON.stringify({ clusters, memberships }));
         } finally {
           store.close();
         }

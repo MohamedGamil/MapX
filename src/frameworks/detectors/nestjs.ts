@@ -42,40 +42,66 @@ export class NestJSDetector implements FrameworkDetector {
 
       // Look back in the content for class decorators
       const classHeaderStart = content.indexOf(`class ${className}`);
-      const lookbackText = content.substring(Math.max(0, classHeaderStart - 300), classHeaderStart);
+      const lookbackText = content.substring(Math.max(0, classHeaderStart - 1000), classHeaderStart);
 
-      const controllerMatch = lookbackText.match(/@Controller\s*\(\s*(?:['"]([^'"]*)['"])?\s*\)/);
+      // Support controller decoration
+      let classPrefix = '';
+      const controllerMatch = lookbackText.match(/@Controller\s*\(\s*([^)]*)\)/);
       if (controllerMatch) {
-        const classPrefix = controllerMatch[1] || '';
+        const arg = controllerMatch[1].trim();
+        if (arg) {
+          if (arg.startsWith('{')) {
+            const pathMatch = arg.match(/path\s*:\s*['"`]([^'"`]*)['"`]/);
+            if (pathMatch) {
+              classPrefix = pathMatch[1];
+            }
+          } else {
+            classPrefix = arg.replace(/^['"`]|['"`]$/g, '');
+          }
+        }
 
-        // Extract routes inside this class
-        const methodRegex = /@(Get|Post|Put|Delete|Patch|Options|All|Head)\s*\(\s*(?:['"]([^'"]*)['"])?\s*\)\s*(?:async\s+)?(\w+)\s*\(/g;
+        // Extract routes inside this class using the new robust helper
+        const methodDecoratorRegex = /@(Get|Post|Put|Delete|Patch|Options|All|Head)\s*\(\s*([^)]*)\)/g;
         let match;
-        while ((match = methodRegex.exec(classBlock)) !== null) {
+        while ((match = methodDecoratorRegex.exec(classBlock)) !== null) {
           const verb = match[1].toUpperCase();
-          const routePath = match[2] || '';
-          const methodName = match[3];
-
-          const cleanPrefix = classPrefix.replace(/^\/|\/$/g, '');
-          const cleanRoute = routePath.replace(/^\/|\/$/g, '');
-          const fullPath = '/' + [cleanPrefix, cleanRoute].filter(Boolean).join('/');
-
-          let resolvedFile = filePath;
-          const resolvedPath = ctx.resolveSymbolToFile(className);
-          if (resolvedPath) {
-            resolvedFile = resolvedPath;
+          const args = match[2].trim();
+          let routePath = '';
+          if (args) {
+            if (args.startsWith('{')) {
+              const pathMatch = args.match(/path\s*:\s*['"`]([^'"`]*)['"`]/);
+              if (pathMatch) {
+                routePath = pathMatch[1];
+              }
+            } else {
+              routePath = args.replace(/^['"`]|['"`]$/g, '');
+            }
           }
 
-          routes.push({
-            framework: this.name,
-            method: verb,
-            path: fullPath,
-            handlerFile: resolvedFile,
-            handlerSymbol: `${className}@${methodName}`,
-            metadata: {
-              confidence: 'inferred',
-            },
-          });
+          const nextIndex = match.index + match[0].length;
+          const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+          if (methodName) {
+            const cleanPrefix = classPrefix.replace(/^\/|\/$/g, '');
+            const cleanRoute = routePath.replace(/^\/|\/$/g, '');
+            const fullPath = '/' + [cleanPrefix, cleanRoute].filter(Boolean).join('/');
+
+            let resolvedFile = filePath;
+            const resolvedPath = ctx.resolveSymbolToFile(className);
+            if (resolvedPath) {
+              resolvedFile = resolvedPath;
+            }
+
+            routes.push({
+              framework: this.name,
+              method: verb,
+              path: fullPath,
+              handlerFile: resolvedFile,
+              handlerSymbol: `${className}@${methodName}`,
+              metadata: {
+                confidence: 'inferred',
+              },
+            });
+          }
         }
       }
     }
@@ -95,7 +121,7 @@ export class NestJSDetector implements FrameworkDetector {
       const className = classNameMatch[1];
 
       const classHeaderStart = content.indexOf(`class ${className}`);
-      const lookbackText = content.substring(Math.max(0, classHeaderStart - 300), classHeaderStart);
+      const lookbackText = content.substring(Math.max(0, classHeaderStart - 1000), classHeaderStart);
 
       let resolvedFile = filePath;
       const resolvedPath = ctx.resolveSymbolToFile(className);
@@ -103,85 +129,295 @@ export class NestJSDetector implements FrameworkDetector {
         resolvedFile = resolvedPath;
       }
 
-      // 1. Class-level guards / middleware
-      const classGuardMatch = lookbackText.match(/@UseGuards\s*\(\s*([^)]+)\)/);
-      if (classGuardMatch) {
-        const guardSymbols = classGuardMatch[1].split(',').map(s => s.trim());
-        for (const guardSymbol of guardSymbols) {
-          let guardFile = filePath;
-          const resolvedGuard = ctx.resolveSymbolToFile(guardSymbol);
-          if (resolvedGuard) {
-            guardFile = resolvedGuard;
+      // 1. Class-level guards / interceptors / pipes / filters
+      const classDecoratorRegex = /@(UseGuards|UseInterceptors|UsePipes|UseFilters)\s*\(\s*([^)]+)\)/g;
+      let classDecMatch;
+      while ((classDecMatch = classDecoratorRegex.exec(lookbackText)) !== null) {
+        const type = classDecMatch[1]; // UseGuards, etc.
+        const list = classDecMatch[2].split(',').map(s => s.trim());
+        for (const item of list) {
+          let itemFile = filePath;
+          const resolvedItem = ctx.resolveSymbolToFile(item);
+          if (resolvedItem) {
+            itemFile = resolvedItem;
           }
           hooks.push({
             framework: this.name,
-            hookName: `guard:${guardSymbol}`,
+            hookName: `${type}:${item}`,
             hookType: 'middleware',
-            handlerFile: guardFile,
-            handlerSymbol: guardSymbol,
+            handlerFile: itemFile,
+            handlerSymbol: className,
           });
         }
       }
 
-      // 2. GraphQL Resolvers
+      // 2. Class interfaces implementation (Guards, Interceptors, Pipes, Lifecycle Hooks)
+      const implementsMatch = classBlock.match(/^[^{]*implements\s+([^{]+)/);
+      if (implementsMatch) {
+        const interfaces = implementsMatch[1].split(',').map(s => s.trim().replace(/<.*>$/, '')); // remove generics
+        for (const iface of interfaces) {
+          if (['CanActivate', 'NestInterceptor', 'PipeTransform', 'OnModuleInit', 'OnApplicationBootstrap', 'OnModuleDestroy', 'BeforeApplicationShutdown', 'OnApplicationShutdown'].includes(iface)) {
+            let hookType = 'hook';
+            let targetMethod = '';
+            if (iface === 'CanActivate') {
+              hookType = 'guard';
+              targetMethod = 'canActivate';
+            } else if (iface === 'NestInterceptor') {
+              hookType = 'interceptor';
+              targetMethod = 'intercept';
+            } else if (iface === 'PipeTransform') {
+              hookType = 'pipe';
+              targetMethod = 'transform';
+            } else if (iface === 'OnModuleInit') {
+              hookType = 'lifecycle';
+              targetMethod = 'onModuleInit';
+            } else if (iface === 'OnApplicationBootstrap') {
+              hookType = 'lifecycle';
+              targetMethod = 'onApplicationBootstrap';
+            } else if (iface === 'OnModuleDestroy') {
+              hookType = 'lifecycle';
+              targetMethod = 'onModuleDestroy';
+            } else if (iface === 'BeforeApplicationShutdown') {
+              hookType = 'lifecycle';
+              targetMethod = 'beforeApplicationShutdown';
+            } else if (iface === 'OnApplicationShutdown') {
+              hookType = 'lifecycle';
+              targetMethod = 'onApplicationShutdown';
+            }
+
+            let handlerSymbol = className;
+            if (targetMethod) {
+              const methodRegex = new RegExp(`\\b${targetMethod}\\s*\\(`);
+              if (methodRegex.test(classBlock)) {
+                handlerSymbol = `${className}@${targetMethod}`;
+              }
+            }
+
+            hooks.push({
+              framework: this.name,
+              hookName: iface,
+              hookType,
+              handlerFile: resolvedFile,
+              handlerSymbol,
+            });
+          }
+        }
+      }
+
+      // 3. Method-level guards / interceptors / pipes / filters
+      const methodDecoratorRegex = /@(UseGuards|UseInterceptors|UsePipes|UseFilters)\s*\(\s*([^)]+)\)/g;
+      let methodDecMatch;
+      while ((methodDecMatch = methodDecoratorRegex.exec(classBlock)) !== null) {
+        const type = methodDecMatch[1];
+        const list = methodDecMatch[2].split(',').map(s => s.trim());
+
+        const nextIndex = methodDecMatch.index + methodDecMatch[0].length;
+        const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+        if (methodName) {
+          for (const item of list) {
+            let itemFile = filePath;
+            const resolvedItem = ctx.resolveSymbolToFile(item);
+            if (resolvedItem) {
+              itemFile = resolvedItem;
+            }
+            hooks.push({
+              framework: this.name,
+              hookName: `${type}:${item}`,
+              hookType: 'middleware',
+              handlerFile: itemFile,
+              handlerSymbol: `${className}@${methodName}`,
+              metadata: {
+                middlewareClass: item,
+              }
+            });
+          }
+        }
+      }
+
+      // 4. GraphQL Resolvers
       const isResolver = /@Resolver\s*\(/.test(lookbackText);
       if (isResolver) {
-        const resolverRegex = /@(Query|Mutation|Subscription)\s*\(\s*(?:['"]([^'"]*)['"])?\s*\)\s*(?:async\s+)?(\w+)\s*\(/g;
-        let match;
-        while ((match = resolverRegex.exec(classBlock)) !== null) {
-          const type = match[1].toLowerCase();
-          const opName = match[2] || match[3];
-          const methodName = match[3];
+        const resolverRegex = /@(Query|Mutation|Subscription)\s*\(\s*([^)]*)\)/g;
+        let gqlMatch;
+        while ((gqlMatch = resolverRegex.exec(classBlock)) !== null) {
+          const type = gqlMatch[1].toLowerCase();
+          const args = gqlMatch[2].trim();
+          let opName = '';
+          if (args) {
+            if (args.startsWith('{')) {
+              const nameMatch = args.match(/name\s*:\s*['"`]([^'"`]*)['"`]/);
+              if (nameMatch) {
+                opName = nameMatch[1];
+              }
+            } else {
+              opName = args.replace(/^['"`]|['"`]$/g, '');
+            }
+          }
 
+          const nextIndex = gqlMatch.index + gqlMatch[0].length;
+          const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+          if (methodName) {
+            if (!opName) opName = methodName;
+            hooks.push({
+              framework: this.name,
+              hookName: opName,
+              hookType: 'graphql_resolver',
+              handlerFile: resolvedFile,
+              handlerSymbol: `${className}@${methodName}`,
+              metadata: {
+                operationType: type,
+              },
+            });
+          }
+        }
+      }
+
+      // 5. Message/Event Handlers
+      const messageRegex = /@(MessagePattern|EventPattern)\s*\(\s*([^)]+)\)/g;
+      let msgMatch;
+      while ((msgMatch = messageRegex.exec(classBlock)) !== null) {
+        const decoratorName = msgMatch[1];
+        const type = decoratorName === 'MessagePattern' ? 'request-response' : 'event-driven';
+        const patternRaw = msgMatch[2].trim();
+        const pattern = patternRaw.replace(/['"`{} ]/g, '');
+
+        const nextIndex = msgMatch.index + msgMatch[0].length;
+        const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+        if (methodName) {
           hooks.push({
             framework: this.name,
-            hookName: opName,
-            hookType: 'graphql_resolver',
+            hookName: pattern || methodName,
+            hookType: 'message_handler',
             handlerFile: resolvedFile,
             handlerSymbol: `${className}@${methodName}`,
             metadata: {
-              operationType: type,
+              patternType: type,
             },
           });
         }
       }
 
-      // 3. Message/Event Handlers
-      const messageRegex = /@(MessagePattern|EventPattern)\s*\(\s*([^)]+)\)\s*(?:async\s+)?(\w+)\s*\(/g;
-      let match;
-      while ((match = messageRegex.exec(classBlock)) !== null) {
-        const type = match[1] === 'MessagePattern' ? 'request-response' : 'event-driven';
-        const pattern = match[2].replace(/['"{}]/g, '').trim();
-        const methodName = match[3];
+      // 6. WebSocket Subscriptions
+      const wsRegex = /@SubscribeMessage\s*\(\s*([^)]+)\)/g;
+      let wsMatch;
+      while ((wsMatch = wsRegex.exec(classBlock)) !== null) {
+        const eventRaw = wsMatch[1].trim();
+        const event = eventRaw.replace(/^['"`]|['"`]$/g, '');
 
-        hooks.push({
-          framework: this.name,
-          hookName: pattern,
-          hookType: 'message_handler',
-          handlerFile: resolvedFile,
-          handlerSymbol: `${className}@${methodName}`,
-          metadata: {
-            patternType: type,
-          },
-        });
-      }
-
-      // 4. WebSocket Subscriptions
-      const wsRegex = /@SubscribeMessage\s*\(\s*['"]([^'"]+)['"]\s*\)\s*(?:async\s+)?(\w+)\s*\(/g;
-      while ((match = wsRegex.exec(classBlock)) !== null) {
-        const event = match[1];
-        const methodName = match[2];
-
-        hooks.push({
-          framework: this.name,
-          hookName: event,
-          hookType: 'websocket_handler',
-          handlerFile: resolvedFile,
-          handlerSymbol: `${className}@${methodName}`,
-        });
+        const nextIndex = wsMatch.index + wsMatch[0].length;
+        const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+        if (methodName) {
+          hooks.push({
+            framework: this.name,
+            hookName: event || methodName,
+            hookType: 'websocket_handler',
+            handlerFile: resolvedFile,
+            handlerSymbol: `${className}@${methodName}`,
+          });
+        }
       }
     }
 
     return hooks;
+  }
+
+  private findMethodNameAfter(text: string, startIndex: number): string | null {
+    let i = startIndex;
+    const len = text.length;
+
+    while (i < len) {
+      const char = text[i];
+
+      // Skip whitespace
+      if (/\s/.test(char)) {
+        i++;
+        continue;
+      }
+
+      // Skip line comments
+      if (char === '/' && text[i + 1] === '/') {
+        i += 2;
+        while (i < len && text[i] !== '\n') {
+          i++;
+        }
+        continue;
+      }
+
+      // Skip block comments
+      if (char === '/' && text[i + 1] === '*') {
+        i += 2;
+        while (i < len && !(text[i] === '*' && text[i + 1] === '/')) {
+          i++;
+        }
+        i += 2;
+        continue;
+      }
+
+      // Skip other decorators
+      if (char === '@') {
+        i++; // skip '@'
+        // skip decorator name identifier
+        while (i < len && /[a-zA-Z0-9_$]/.test(text[i])) {
+          i++;
+        }
+        // skip whitespace
+        while (i < len && /\s/.test(text[i])) {
+          i++;
+        }
+        // if there are parentheses, balance them
+        if (text[i] === '(') {
+          i++; // skip '('
+          let parenCount = 1;
+          let inString = false;
+          let quoteChar = '';
+          while (i < len && parenCount > 0) {
+            const c = text[i];
+            if (inString) {
+              if (c === quoteChar && text[i - 1] !== '\\') {
+                inString = false;
+              }
+            } else {
+              if (c === '"' || c === "'" || c === '`') {
+                inString = true;
+                quoteChar = c;
+              } else if (c === '(') {
+                parenCount++;
+              } else if (c === ')') {
+                parenCount--;
+              }
+            }
+            i++;
+          }
+        }
+        continue;
+      }
+
+      // Read identifier/word
+      if (/[a-zA-Z0-9_$]/.test(char)) {
+        let word = '';
+        while (i < len && /[a-zA-Z0-9_$]/.test(text[i])) {
+          word += text[i];
+          i++;
+        }
+
+        const modifiers = new Set(['public', 'private', 'protected', 'readonly', 'static', 'async', 'get', 'set']);
+        if (modifiers.has(word)) {
+          continue;
+        }
+
+        // Verify the next non-whitespace char is '(' to confirm it's a method name
+        let j = i;
+        while (j < len && /\s/.test(text[j])) {
+          j++;
+        }
+        if (text[j] === '(') {
+          return word;
+        }
+      } else {
+        // Skip any unexpected chars
+        i++;
+      }
+    }
+    return null;
   }
 }

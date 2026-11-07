@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolve, join, dirname, relative, basename } from 'node:path';
-import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
@@ -9,6 +9,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
+import { ContextBuilder } from './core/context-builder.js';
 import { AgentGenerator } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
@@ -18,22 +19,16 @@ import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import { VERSION } from './version.js';
+import { findSimilarSymbols } from './core/fuzzy-matcher.js';
+import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
-
-function readVersion(): string {
-  const base = dirname(fileURLToPath(import.meta.url));
-  // Compiled binary: VERSION is in the same directory as the binary
-  // Development (tsx): VERSION is one level up from src/
-  for (const candidate of [join(base, 'VERSION'), join(base, '..', 'VERSION')]) {
-    if (existsSync(candidate)) return readFileSync(candidate, 'utf-8').trim();
-  }
-  return '0.1.0';
-}
 
 function collectPatterns(val: string, memo: string[]): string[] {
   return memo.concat(val.split(',').map(s => s.trim()));
@@ -53,59 +48,97 @@ const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string
   cluster: { active: 'Detecting clusters', done: 'Detected clusters' },
 };
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⸦', '⢼', '⣴', '⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾'];
-let spinnerIdx = 0;
+interface ProgressRendererCallback {
+  (progress: ScanProgress): void;
+  stop: (title?: string) => void;
+}
 
-function createProgressRenderer(): ProgressCallback {
+function truncatePath(path: string, maxLength: number): string {
+  if (path.length <= maxLength) return path;
+  if (maxLength <= 3) return '...';
+  return '...' + path.slice(path.length - maxLength + 3);
+}
+
+function createProgressRenderer(): ProgressRendererCallback {
   let lastPhase: ScanProgress['phase'] | null = null;
-  let lastLineLen = 0;
+  let p: any = null;
+  let s: any = null;
+  let lastCurrent = 0;
 
-  const writeLine = (line: string) => {
-    const clear = lastLineLen > 0 ? '\r' + ' '.repeat(lastLineLen) + '\r' : '\r';
-    process.stderr.write(clear + line);
-    lastLineLen = line.length;
-  };
-
-  const renderBar = (current: number, total: number, width: number = 20): string => {
-    if (total === 0) {
-      const frame = SPINNER_FRAMES[spinnerIdx++ % SPINNER_FRAMES.length];
-      return `${frame} `;
-    }
-    const filled = Math.min(width, Math.max(0, Math.round((current / total) * width)));
-    const empty = width - filled;
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
-    const pct = Math.round((current / total) * 100);
-    return `${bar} ${pct}%`;
-  };
-
-  return (progress: ScanProgress) => {
-    const { phase, current, total, file } = progress;
+  const callback = (progressData: ScanProgress) => {
+    const { phase, current, total, file } = progressData;
     const label = PHASE_LABELS[phase];
+    if (!label) return;
     const isNewPhase = phase !== lastPhase;
 
-    if (isNewPhase && lastPhase !== null) {
-      const prevLabel = PHASE_LABELS[lastPhase];
-      writeLine(`  ✔ ${prevLabel.done}\n`);
-    }
+    if (isNewPhase) {
+      if (s) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        s.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        s = null;
+      }
+      if (p) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        p.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        p = null;
+      }
 
-    lastPhase = phase;
+      lastPhase = phase;
+      lastCurrent = 0;
 
-    const bar = renderBar(current, total);
-    const counter = total > 0 ? `${current}/${total}` : `${current}`;
-    let line = `  ${label.active} ${bar} ${counter}`;
-
-    if (file) {
-      const maxFileLen = Math.max(0, 60 - line.length);
-      const displayFile = file.length > maxFileLen && maxFileLen > 3
-        ? '…' + file.slice(-(maxFileLen - 1))
-        : file.length <= maxFileLen ? file : '';
-      if (displayFile) {
-        line += ` ${displayFile}`;
+      if (total > 0) {
+        p = clack.progress({
+          style: 'heavy',
+          max: total,
+          size: 40,
+        });
+        p.start(label.active);
+      } else {
+        s = clack.spinner();
+        s.start(label.active);
       }
     }
 
-    writeLine(line);
+    const cols = process.stdout.columns || 80;
+    let fileLabel = '';
+    if (file) {
+      const prefixText = p 
+        ? `${label.active} (${current}/${total}) - `
+        : `${label.active} (${current}) - `;
+      const clackDecorationLength = p ? 45 : 5;
+      const reserved = prefixText.length + clackDecorationLength;
+      const maxFileLen = Math.max(10, cols - reserved - 3);
+      fileLabel = ` - ${truncatePath(file, maxFileLen)}`;
+    }
+
+    if (p) {
+      const diff = current - lastCurrent;
+      const msg = `${label.active} (${current}/${total})${fileLabel}`;
+      if (diff > 0) {
+        p.advance(diff, msg);
+        lastCurrent = current;
+      } else {
+        p.message(msg);
+      }
+    } else if (s) {
+      s.message(`${label.active} (${current})${fileLabel}`);
+    }
   };
+
+  callback.stop = (title?: string) => {
+    if (s) {
+      const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+      s.stop(title || (prevLabel ? `✔ ${prevLabel.done}` : '✔ Done'));
+      s = null;
+    }
+    if (p) {
+      const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+      p.stop(title || (prevLabel ? `✔ ${prevLabel.done}` : '✔ Done'));
+      p = null;
+    }
+  };
+
+  return callback;
 }
 
 const MAPX_MARKER_START = '<!-- mapx -->';
@@ -200,50 +233,23 @@ function replaceBetweenMarkers(existing: string, block: string): string {
   return existing.slice(0, startIdx) + block + existing.slice(endIdx + MAPX_MARKER_END.length);
 }
 
-function prompt(question: string, options: string[]): Promise<number> {
-  return new Promise((res) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-    const labels = options.map((o, i) => `  ${i + 1}) ${o}`);
-    process.stderr.write(question + '\n' + labels.join('\n') + '\n> ');
-    rl.question('', (answer) => {
-      rl.close();
-      const num = parseInt(answer.trim(), 10);
-      res(num >= 1 && num <= options.length ? num - 1 : options.length - 1);
-    });
-  });
-}
-
-function askQuestion(query: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
-}
-
 async function selectProvidersInteractive(): Promise<string[]> {
   const generator = new AgentGenerator();
   const providers = generator.listProviders();
-  console.log('\nWhich LLM/agent tools do you use in this project?');
-  console.log('Enter numbers separated by commas (e.g. 1,3), type "all" for all, or press Enter for default [1 (generic)]:');
-  providers.forEach((p, idx) => {
-    console.log(`  [${idx + 1}] ${p}`);
+
+  const selected = await clack.multiselect({
+    message: 'Which LLM/agent tools do you use in this project?',
+    options: providers.map(p => ({ value: p, label: p })),
+    required: false,
   });
 
-  const answer = await askQuestion('\nSelection: ');
-  const input = answer.trim().toLowerCase();
-  if (!input) {
-    return ['generic'];
+  if (clack.isCancel(selected)) {
+    clack.cancel('Operation cancelled.');
+    process.exit(0);
   }
-  if (input === 'all') {
-    return providers;
-  }
-  const parts = input.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n) && n >= 1 && n <= providers.length);
-  const selected = parts.map((n: number) => providers[n - 1]);
-  return selected.length === 0 ? ['generic'] : selected;
+
+  const result = selected as string[];
+  return result.length === 0 ? ['generic'] : result;
 }
 
 export function buildCLI(): Command {
@@ -252,7 +258,7 @@ export function buildCLI(): Command {
   program
     .name('mapx')
     .description('Multi-language code graph memory system for LLMs')
-    .version(readVersion())
+    .version(VERSION)
     .option('-d, --dir <path>', 'Target project directory (default: current directory)');
 
 function detectLaravel(workspaceRoot: string): boolean {
@@ -307,8 +313,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   console.log('  ✓ resources/views/**       (Blade templates — not yet supported)');
   console.log('  ✓ **/*.blade.php           (Blade files)');
   
-  const answer = await askQuestion('\nAdd these to .mapx/config.json? [Y/n] ');
-  return answer.toLowerCase() !== 'n';
+  const answer = await clack.confirm({
+    message: 'Add these to .mapx/config.json?',
+    initialValue: true,
+  });
+  if (clack.isCancel(answer)) {
+    clack.cancel('Operation cancelled.');
+    process.exit(0);
+  }
+  return answer;
 }
 
   program
@@ -330,23 +343,23 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (opts.agents !== false) {
         if (process.stdin.isTTY && opts.suggestions !== false) {
           const selected = await selectProvidersInteractive();
-          console.log(`Generating integration files for: ${selected.join(', ')}...`);
+          clack.log.step(`Generating integration files for: ${selected.join(', ')}...`);
           const generator = new AgentGenerator();
           const actions = generator.plan(selected, { dir });
           for (const action of actions) {
             generator.execute(action);
-            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+            clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
         } else {
           const generator = new AgentGenerator();
           const actions = generator.plan(['generic'], { dir });
           for (const action of actions) {
             generator.execute(action);
-            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+            clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
         }
       }
-
+ 
       // Auto-generate MCP config files for detected agent tools
       if (opts.mcpConfigs !== false) {
         const generator = new AgentGenerator();
@@ -357,11 +370,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             if (action.status === 'up_to_date') continue;
             generator.executeMcpConfig(action);
             const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
-            console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+            clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
           }
         }
       }
-
+ 
       // Auto-add .mapx/ to .gitignore
       const gitignorePath = join(dir, '.gitignore');
       const hasGitignore = existsSync(gitignorePath);
@@ -372,11 +385,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (!lines.includes('.mapx/') && !lines.includes('.mapx')) {
           const entry = content.length > 0 && !content.endsWith('\n') ? '\n.mapx/\n' : '.mapx/\n';
           writeFileSync(gitignorePath, content + entry);
-          console.log(`  ✓ Added .mapx/ to .gitignore`);
+          clack.log.success(`Added .mapx/ to .gitignore`);
         }
       }
-      console.log(`Initialized mapx in ${dir}/.mapx/`);
-      console.log(`Repo: ${config.repo.name}`);
+      clack.log.success(`Initialized mapx in ${dir}/.mapx/`);
+      clack.log.info(`Repo: ${config.repo.name}`);
     });
 
   program
@@ -389,9 +402,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const hasMapx = existsSync(join(dir, '.mapx'));
 
       if (!opts.force && process.stdin.isTTY) {
-        const answer = await askQuestion(`Are you sure you want to remove .mapx/ and reverse all mapx integrations in ${dir}? [y/N] `);
-        if (answer.trim().toLowerCase() !== 'y') {
-          console.log('Aborted.');
+        const answer = await clack.confirm({
+          message: `Are you sure you want to remove .mapx/ and reverse all mapx integrations in ${dir}?`,
+          initialValue: false,
+        });
+        if (clack.isCancel(answer) || !answer) {
+          clack.cancel('Aborted.');
           return;
         }
       }
@@ -420,10 +436,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           });
           if (removed) {
             writeFileSync(gitignorePath, filteredLines.join('\n'), 'utf-8');
-            console.log(`  ✓ Removed .mapx/ from .gitignore`);
+            clack.log.success(`Removed .mapx/ from .gitignore`);
           }
         } catch (err: any) {
-          console.error(`  ✗ Failed to update .gitignore: ${err.message}`);
+          clack.log.error(`Failed to update .gitignore: ${err.message}`);
         }
       }
 
@@ -431,13 +447,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (hasMapx) {
         try {
           rmSync(join(dir, '.mapx'), { recursive: true, force: true });
-          console.log(`  ✓ Removed .mapx/ directory`);
+          clack.log.success(`Removed .mapx/ directory`);
         } catch (err: any) {
-          console.error(`  ✗ Failed to remove .mapx/ directory: ${err.message}`);
+          clack.log.error(`Failed to remove .mapx/ directory: ${err.message}`);
         }
       }
 
-      console.log(`Successfully uninitialized mapx for project: ${dir}`);
+      clack.log.success(`Successfully uninitialized mapx for project: ${dir}`);
     });
 
 
@@ -462,6 +478,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const onSigInt = () => {
         scanner.abort();
+        onProgress.stop('Canceled');
         process.stderr.write('\n');
       };
       process.once('SIGINT', onSigInt);
@@ -474,23 +491,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       const result = await scanner.scanFull(repoNames, { force: !!opts.force }).catch((err: Error) => {
+        onProgress.stop();
         if (err.message.includes('Another scan is already running')) {
-          console.error(`Error: ${err.message}`);
+          clack.log.error(`Error: ${err.message}`);
           process.exit(1);
         }
         throw err;
       });
 
       process.removeListener('SIGINT', onSigInt);
-      process.stderr.write('\r' + ' '.repeat(80) + '\r');
+      onProgress.stop();
 
       if (result.interrupted) {
-        console.log(`Scan interrupted after ${result.filesScanned}/${result.totalFiles} files. Progress saved — run \`scan\` again to resume.`);
+        clack.log.warn(`Scan interrupted after ${result.filesScanned}/${result.totalFiles} files. Progress saved — run \`scan\` again to resume.`);
       } else {
-        console.log(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
+        clack.log.success(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
       }
-      console.log(`Languages: ${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')}`);
-      console.log(`Found ${result.symbolsFound} symbols, ${result.edgesFound} edges`);
+      clack.log.info(`Languages: ${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')}`);
+      clack.log.info(`Found ${result.symbolsFound} symbols, ${result.edgesFound} edges`);
     });
 
   program
@@ -507,7 +525,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { config, store, graph } = await loadContext(dir);
       const onProgress = createProgressRenderer();
 
-      const handleLockError = (err: Error) => {
+      const handleLockError = (err: Error): never => {
         if (err.message.includes('Another scan is already running')) {
           console.error(`Error: ${err.message}`);
           process.exit(1);
@@ -526,15 +544,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
       });
-      process.once('SIGINT', () => scanner.abort());
-      const result = await scanner.scanIncremental(repoNames).catch(handleLockError);
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+      const result = await scanner.scanIncremental(repoNames).catch((err: Error) => {
+        onProgress.stop();
+        handleLockError(err);
+        throw err;
+      });
 
-      process.stderr.write('\r' + ' '.repeat(80) + '\r');
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
       if (result.interrupted) {
-        console.log(`Update interrupted after ${result.filesScanned} files.`);
+        clack.log.warn(`Update interrupted after ${result.filesScanned} files.`);
       } else {
-        console.log(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
-        console.log(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
+        clack.log.success(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
+        clack.log.info(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
       }
     });
 
@@ -712,18 +739,30 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('query <term>')
-    .description('Search for symbols by name')
+    .description('Search for symbols by name (supports glob patterns: *Service, get*)')
     .option('-d, --dir <path>', 'Target directory')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const results = store.searchSymbols(term);
       if (results.length === 0) {
+        // Fuzzy fallback: suggest similar symbol names
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(term, candidates);
         console.log(`No symbols matching "${term}"`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*" or "*" to list all.`);
         return;
       }
 
+      console.log(`Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n`);
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
         console.log(`  ${sym.kind} ${scope}${sym.name}`);
@@ -736,26 +775,55 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('search <term>')
-    .description('Symbol search with kind/file/exact filters')
+    .description('Symbol search with kind/file/exact filters and glob patterns (*, ?)')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--kind <kind>', 'Filter by symbol kind (e.g. class, method)')
+    .option('--kind <kind>', 'Filter by symbol kind (class, method, function, interface, trait, constant, enum, property, namespace, struct, module)')
     .option('--file <prefix>', 'Filter by file path prefix')
-    .option('--exact', 'Only match exact name', false)
+    .option('--exact', 'Only match exact name (case-insensitive)', false)
     .option('--limit <limit>', 'Max results to return', '20')
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
-      const results = store.searchSymbolsFiltered({
-        term,
-        kind: opts.kind as string,
-        filePrefix: opts.file as string,
-        exact: !!opts.exact,
-        limit: parseInt(opts.limit as string, 10),
-      });
+      const kind = opts.kind as string | undefined;
+      const filePrefix = opts.file as string | undefined;
+      const exact = !!opts.exact;
+      const limit = parseInt(opts.limit as string, 10);
+      const format = (opts.format as string) || 'text';
+
+      let results = store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
+      let broadened = false;
+
+      // Auto-expand: if kind filter yields 0 results, retry without kind
+      if (results.length === 0 && kind && term !== '*' && term !== '') {
+        const withoutKind = store.searchSymbolsFiltered({ term, filePrefix, exact, limit });
+        if (withoutKind.length > 0) {
+          results = withoutKind;
+          broadened = true;
+        }
+      }
 
       if (results.length === 0) {
+        // Fuzzy fallback
         console.log(`No symbols matching "${term}"`);
+        if (kind) {
+          const kinds = store.listSymbolKinds();
+          console.log(`\nAvailable kinds:`);
+          for (const k of kinds) console.log(`  ${k.kind}: ${k.count} symbols`);
+        }
+        if (term !== '*' && term !== '') {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(term, candidates);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+          console.log(`\nTip: Use term="*" to list all, or glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*"`);
+        }
         return;
       }
 
@@ -764,6 +832,29 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const item of rankedAll) {
         rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
       }
+
+      // JSON format
+      if (format === 'json') {
+        const jsonResults = results.map(sym => ({
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          line: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
+        }));
+        console.log(JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2));
+        return;
+      }
+
+      // Summary header
+      let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+      if (kind && !broadened) header += ` of kind "${kind}"`;
+      if (filePrefix) header += ` in ${filePrefix}`;
+      if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
+      console.log(header + ':\n');
 
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
@@ -785,6 +876,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
       const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
@@ -818,11 +910,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callers found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callers found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callers of "${symbol}":`);
+      console.log(`${results.length} caller${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}← ${res.caller} (calls ${res.callee})`);
@@ -838,6 +944,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
       const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
@@ -870,11 +977,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callees found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callees found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callees of "${symbol}":`);
+      console.log(`${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}→ ${res.callee} (called by ${res.caller})`);
@@ -891,76 +1012,39 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
-      const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
-      const visited = new Set<string>([symbol]);
-      const items: Array<{ symbol: string; file: string; depth: number; edgeType: string; risk: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
-
-      while (queue.length > 0) {
-        const { symName, depth } = queue.shift()!;
-        if (depth >= maxDepth) continue;
-
-        const callers = store.getCallersOfSymbol(symName);
-        for (const edge of callers) {
-          const callerName = edge.source_symbol || '<top-level>';
-          const key = `${edge.source_file}::${callerName}`;
-          if (visited.has(key)) continue;
-          visited.add(key);
-
-          let risk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-          const isStructural = ['import', 'require', 'extends', 'implements'].includes(edge.edge_type);
-          const curDepth = depth + 1;
-
-          if (curDepth === 1) {
-            risk = isStructural ? 'MEDIUM' : 'HIGH';
-          } else if (curDepth === 2) {
-            risk = isStructural ? 'LOW' : 'MEDIUM';
-          } else {
-            risk = 'LOW';
-          }
-
-          items.push({
-            symbol: callerName,
-            file: edge.source_file,
-            depth: curDepth,
-            edgeType: edge.edge_type,
-            risk
-          });
-
-          if (edge.source_symbol) {
-            queue.push({ symName: edge.source_symbol, depth: curDepth });
+      // Fuzzy pre-check: verify symbol exists before running analysis
+      const sym = store.getSymbolByName(symbol);
+      if (!sym) {
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
           }
         }
+        process.exit(1);
       }
 
-      let recommendation = 'No callers found — safe to change';
-      if (items.some(x => x.risk === 'HIGH')) {
-        recommendation = 'Treat as BREAKING CHANGE — update all HIGH-risk callers';
-      } else if (items.length > 0) {
-        recommendation = 'Low blast radius — proceed with caution';
-      }
+      const analyzer = new ImpactAnalyzer(store);
+      const result = analyzer.analyze(symbol, maxDepth, dir);
 
       if (opts.format === 'json') {
-        console.log(JSON.stringify({
-          affected: items,
-          summary: {
-            high: items.filter(x => x.risk === 'HIGH').length,
-            medium: items.filter(x => x.risk === 'MEDIUM').length,
-            low: items.filter(x => x.risk === 'LOW').length,
-          },
-          recommendation
-        }, null, 2));
+        console.log(JSON.stringify(result, null, 2));
       } else {
-        if (items.length === 0) {
+        if (result.affected.length === 0) {
           console.log(`No callers affected by changing "${symbol}"`);
         } else {
           console.log(`Impact analysis for "${symbol}":`);
-          for (const item of items) {
+          for (const item of result.affected) {
             console.log(`  [${item.risk}] ${item.symbol} (${item.file}) [depth: ${item.depth}, type: ${item.edgeType}]`);
           }
         }
-        console.log(`\nRecommendation: ${recommendation}`);
+        console.log(`\nRecommendation: ${result.recommendation}`);
       }
     });
 
@@ -969,19 +1053,60 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Show full symbol details and optional source code')
     .option('-d, --dir <path>', 'Target directory')
     .option('--source', 'Extract and display source code', false)
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
-      const { readFileSync } = await import('node:fs');
+      checkAndPrintStaleness(store, dir);
 
       const sym = store.getSymbolByName(symbol);
       if (!sym) {
-        console.error(`Error: Symbol "${symbol}" not found`);
+        // Fuzzy fallback
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use mapx search to find symbols by pattern. Example: mapx search "${symbol.length > 3 ? symbol.slice(0, 4) : symbol}*"`);
         process.exit(1);
       }
 
       const callers = store.getCallersOfSymbol(symbol);
       const callees = store.getCalleesOfSymbol(symbol);
+      const format = (opts.format as string) || 'text';
+
+      // JSON format
+      if (format === 'json') {
+        const result: Record<string, any> = {
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          startLine: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          callerCount: callers.length,
+          calleeCount: callees.length,
+        };
+        if (opts.source) {
+          try {
+            const absolutePath = resolve(dir, sym.file_path as string);
+            const content = readFileSync(absolutePath, 'utf8');
+            const lines = content.split('\n');
+            const start = (sym.start_line as number) - 1;
+            const end = (sym.end_line as number);
+            result.source = lines.slice(start, end).join('\n');
+          } catch (err: any) {
+            result.sourceError = err.message;
+          }
+        }
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
 
       console.log(`Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}`);
       console.log(`Kind:   ${sym.kind}`);
@@ -1020,6 +1145,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const results = store.getFilesFiltered({
         pathPrefix: opts.path as string,
@@ -1045,6 +1171,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (file: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const deps = graph.getDependencies(file);
       const rdeps = graph.getReverseDependencies(file);
@@ -1081,6 +1208,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (start: string | undefined, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const tracer = new FlowTracer(store);
 
@@ -1109,7 +1237,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
         for (const s of sinks) {
           const inEdges = store.getReverseEdges(s.file).filter(e => [
-            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route'
+            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
           ].includes(e.edge_type as string));
           let extra = `[terminal — no outgoing data edges]`;
           if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
@@ -1324,6 +1452,133 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     });
 
   program
+    .command('sources')
+    .description('Find entry points (data sources) in the codebase')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const tracer = new FlowTracer(store);
+      const sources = tracer.findSources(config.repo.name);
+      console.log(`\nEntry points (data sources) — ${sources.length} found:`);
+      for (const s of sources) {
+        let extra = '[no incoming data edges]';
+        if (s.file.includes('routes/')) {
+          const routes = store.getEdgesForFile(s.file).filter(e => e.edge_type === 'route');
+          extra = `[route file — ${routes.length} controller endpoints]`;
+        } else if (s.file.includes('app/Jobs/')) {
+          extra = '[dispatched externally — queue worker]';
+        } else if (s.file.includes('app/Listeners/')) {
+          extra = '[event listener — external trigger]';
+        } else if (s.file.includes('app/Http/Middleware/')) {
+          extra = '[middleware — filter chain entry]';
+        }
+        console.log(`  ${s.file.padEnd(40)} ${extra}`);
+      }
+    });
+
+  program
+    .command('sinks')
+    .description('Find terminal consumers (data sinks) in the codebase')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const tracer = new FlowTracer(store);
+      const sinks = tracer.findSinks(config.repo.name);
+      console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
+      for (const s of sinks) {
+        const inEdges = store.getReverseEdges(s.file).filter(e => [
+          'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
+        ].includes(e.edge_type as string));
+        let extra = `[terminal — no outgoing data edges]`;
+        if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
+          extra = `[DB facade → raw SQL — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('CacheManager') || s.file.includes('cache')) {
+          extra = `[Cache facade → Redis/Memcache — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('Mailer') || s.file.includes('mail')) {
+          extra = `[Mail facade → SMTP — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('QueueManager') || s.file.includes('queue')) {
+          extra = `[Queue::push — ${inEdges.length} in-edges]`;
+        }
+        console.log(`  ${s.file.padEnd(40)} ${extra}`);
+      }
+    });
+
+  program
+    .command('context <task>')
+    .description('Generate task-specific workspace context within a token budget')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--seeds <list>', 'Comma-separated list of seed symbols or file paths')
+    .option('--tokens <budget>', 'Maximum estimated token budget', '8192')
+    .option('--depth <n>', 'Graph traversal depth', '2')
+    .option('--format <format>', 'Output format: text | json', 'text')
+    .action(async (task: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const builder = new ContextBuilder(store, graph);
+      const parsedTokens = parseInt(opts.tokens as string, 10) || 8192;
+      const parsedDepth = parseInt(opts.depth as string, 10) || 2;
+      const format = opts.format as string;
+      const seeds = opts.seeds ? (opts.seeds as string).split(',').map(s => s.trim()) : undefined;
+
+      const result = await builder.buildContext({
+        task,
+        seeds,
+        tokens: parsedTokens,
+        depth: parsedDepth,
+      });
+
+      if (format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log('# MapX Smart Context');
+      console.log(`*Estimated tokens:* ${result.estimatedTokens}\n`);
+      
+      console.log('## Included Files');
+      if (result.includedFiles.length === 0) {
+        console.log('None');
+      } else {
+        for (const f of result.includedFiles) {
+          console.log(`### [${f.path}](file://${resolve(dir, f.path)})`);
+          console.log(`- Language: ${f.language}`);
+          console.log(`- Lines: ${f.lineCount} | Size: ${f.sizeBytes} bytes`);
+          if (f.symbols.length > 0) {
+            console.log('- Symbols:');
+            for (const sym of f.symbols) {
+              const scopeStr = sym.scope ? `${sym.scope}::` : '';
+              console.log(`  - \`${sym.kind}\` \`${scopeStr}${sym.name}\` (lines ${sym.startLine}-${sym.endLine})`);
+            }
+          }
+        }
+      }
+
+      if (result.edges.length > 0) {
+        console.log('\n## Cross-File Dependencies');
+        for (const edge of result.edges) {
+          const srcSym = edge.sourceSymbol ? `#${edge.sourceSymbol}` : '';
+          const tgtSym = edge.targetSymbol ? `#${edge.targetSymbol}` : '';
+          console.log(`- \`${edge.sourceFile}${srcSym}\` → \`${edge.targetFile}${tgtSym}\` (${edge.edgeType})`);
+        }
+      }
+
+      if (result.excludedFiles.length > 0) {
+        console.log('\n## Excluded Files (Token budget exhausted)');
+        for (const f of result.excludedFiles) {
+          console.log(`- ${f}`);
+        }
+      }
+    });
+
+  program
     .command('export')
     .description('Export code graph for LLM consumption')
     .option('-d, --dir <path>', 'Target directory')
@@ -1470,11 +1725,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Install grammar and query files for an installable language')
     .action(async (lang: string) => {
       try {
-        console.log(`Installing language '${lang}'...`);
+        clack.log.step(`Installing language '${lang}'...`);
         await installLanguage(lang);
-        console.log(`Successfully installed language '${lang}'.`);
+        clack.log.success(`Successfully installed language '${lang}'.`);
       } catch (err: any) {
-        console.error(`Error installing language '${lang}':`, err.message);
+        clack.log.error(`Error installing language '${lang}': ${err.message}`);
         process.exit(1);
       }
     });
@@ -1484,11 +1739,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Uninstall grammar and query files for an installable language')
     .action(async (lang: string) => {
       try {
-        console.log(`Uninstalling language '${lang}'...`);
+        clack.log.step(`Uninstalling language '${lang}'...`);
         await uninstallLanguage(lang);
-        console.log(`Successfully uninstalled language '${lang}'.`);
+        clack.log.success(`Successfully uninstalled language '${lang}'.`);
       } catch (err: any) {
-        console.error(`Error uninstalling language '${lang}':`, err.message);
+        clack.log.error(`Error uninstalling language '${lang}': ${err.message}`);
         process.exit(1);
       }
     });
@@ -1561,6 +1816,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const metrics = calculateMetrics(store, {
         repo: config.repo.name,
         language: opts.lang as string | undefined,
@@ -1722,6 +1978,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const edges = store.queryEdges({
         repo: config.repo.name,
         type: opts.type as string | undefined,
@@ -1872,7 +2129,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (targets.length === 0) {
-        console.error('No valid providers specified.');
+        clack.log.error('No valid providers specified.');
         process.exit(1);
       }
 
@@ -1880,29 +2137,32 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       for (const action of actions) {
         if (action.status === 'up_to_date') {
-          console.log(`  - ${action.filename}: Up to date. Skipping.`);
+          clack.log.info(`${action.filename}: Up to date. Skipping.`);
           continue;
         }
 
         if (action.status === 'update_conflict' || action.status === 'no_sentinel') {
-          console.log(`\n⚠️ Conflict/Modification detected in ${action.filename}:`);
+          clack.log.warn(`Conflict/Modification detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
           }
           if (!opts.force) {
-            const confirm = await askQuestion(`Overwrite ${action.filename}? [y/N] `);
-            if (confirm.trim().toLowerCase() !== 'y') {
-              console.log(`Skipped ${action.filename}.`);
+            const confirm = await clack.confirm({
+              message: `Overwrite ${action.filename}?`,
+              initialValue: false,
+            });
+            if (clack.isCancel(confirm) || !confirm) {
+              clack.log.warn(`Skipped ${action.filename}.`);
               continue;
             }
           }
         }
 
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
+          clack.log.info(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
         } else {
           generator.execute(action);
-          console.log(`✓ Wrote to ${action.filename} (status: ${action.status})`);
+          clack.log.success(`Wrote to ${action.filename} (status: ${action.status})`);
         }
       }
     });
@@ -1924,7 +2184,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       });
 
       if (existingProviders.length === 0) {
-        console.log('No existing LLM integration files found to update.');
+        clack.log.info('No existing LLM integration files found to update.');
         return;
       }
 
@@ -1937,30 +2197,33 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
 
         if (action.status === 'update_conflict') {
-          console.log(`\n⚠️ Customized content detected in ${action.filename}:`);
+          clack.log.warn(`Customized content detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
           }
           if (!opts.force) {
-            const confirm = await askQuestion(`Overwrite customizations in ${action.filename}? [y/N] `);
-            if (confirm.trim().toLowerCase() !== 'y') {
-              console.log(`Skipped ${action.filename}.`);
+            const confirm = await clack.confirm({
+              message: `Overwrite customizations in ${action.filename}?`,
+              initialValue: false,
+            });
+            if (clack.isCancel(confirm) || !confirm) {
+              clack.log.warn(`Skipped ${action.filename}.`);
               continue;
             }
           }
         }
 
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would update ${action.filepath}`);
+          clack.log.info(`[DRY RUN] Would update ${action.filepath}`);
         } else {
           generator.execute(action);
-          console.log(`✓ Updated ${action.filename}`);
+          clack.log.success(`Updated ${action.filename}`);
           updatedCount++;
         }
       }
 
       if (updatedCount === 0 && !opts.dryRun) {
-        console.log('All integration files are already up to date.');
+        clack.log.success('All integration files are already up to date.');
       }
     });
 
@@ -1990,39 +2253,39 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       if (opts.detect) {
         if (targets.length === 0) {
-          console.log('No agent tools detected in this project.');
+          clack.log.info('No agent tools detected in this project.');
         } else {
-          console.log(`\nDetected agent tools (${targets.length}):`);
+          clack.log.info(`Detected agent tools (${targets.length}):`);
           for (const t of targets) {
-            console.log(`  ✓ ${t.name.padEnd(15)} → ${t.filename}`);
+            clack.log.success(`${t.name.padEnd(15)} → ${t.filename}`);
           }
         }
-        console.log(`\nAll available targets:`);
+        clack.log.info(`All available targets:`);
         for (const c of allConfigs) {
           const detected = targets.includes(c);
           const icon = detected ? '✓' : '·';
-          console.log(`  ${icon} ${c.name.padEnd(15)} → ${c.filename}`);
+          clack.log.info(`${icon} ${c.name.padEnd(15)} → ${c.filename}`);
         }
         return;
       }
 
       if (targets.length === 0) {
-        console.log('No agent tools detected. Use --all or --tools to specify targets.');
+        clack.log.warn('No agent tools detected. Use --all or --tools to specify targets.');
         return;
       }
 
       const actions = generator.generateMcpConfigs(targets, { dir });
       for (const action of actions) {
         if (action.status === 'up_to_date') {
-          console.log(`  - ${action.filename}: Up to date.`);
+          clack.log.info(`${action.filename}: Up to date.`);
           continue;
         }
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
+          clack.log.info(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
         } else {
           generator.executeMcpConfig(action);
           const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
-          console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+          clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
         }
       }
     });
@@ -2092,11 +2355,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const absPath = resolve(dir, repoPath);
       if (!existsSync(absPath)) {
-        console.error(`Error: Path ${repoPath} does not exist.`);
+        clack.log.error(`Path ${repoPath} does not exist.`);
         process.exit(1);
       }
       if (!isGitRepo(absPath)) {
-        console.error(`Error: Path ${repoPath} is not a git repository.`);
+        clack.log.error(`Path ${repoPath} is not a git repository.`);
         process.exit(1);
       }
 
@@ -2104,19 +2367,32 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const name = (opts.name as string) || basename(absPath);
 
       if (config.repos.some(r => r.name === name || r.path === relPath)) {
-        console.log(`Repository already registered: ${name} (${relPath})`);
+        clack.log.warn(`Repository already registered: ${name} (${relPath})`);
         return;
       }
 
       config.addRepo(name, relPath);
       await config.save();
-      console.log(`Registered repository: ${name} -> ${relPath}`);
+      clack.log.success(`Registered repository: ${name} -> ${relPath}`);
 
-      console.log('Running initial full scan for the new repository...');
+      clack.log.step('Running initial full scan for the new repository...');
       const onProgress = createProgressRenderer();
       const scanner = new Scanner(store, config, graph, onProgress);
-      const result = await scanner.scanFull([name]);
-      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+
+      const result = await scanner.scanFull([name]).catch((err) => {
+        onProgress.stop();
+        throw err;
+      });
+
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
+      clack.log.success(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
     });
 
   workspacesCmd
@@ -2128,18 +2404,18 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const repo = config.repos.find(r => r.name === name || r.path === name);
       if (!repo) {
-        console.error(`Error: Repository ${name} is not registered.`);
+        clack.log.error(`Repository ${name} is not registered.`);
         process.exit(1);
       }
 
       const repoName = repo.name;
       config.removeRepo(name);
       await config.save();
-      console.log(`Unregistered repository: ${repoName}`);
+      clack.log.success(`Unregistered repository: ${repoName}`);
 
-      console.log(`Cleaning up stored data for repository: ${repoName}...`);
+      clack.log.step(`Cleaning up stored data for repository: ${repoName}...`);
       store.deleteRepo(repoName);
-      console.log(`Done.`);
+      clack.log.success(`Done.`);
     });
 
   workspacesCmd
@@ -2255,23 +2531,36 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (toAdd.length === 0) {
-        console.log('No new repositories discovered to sync.');
+        clack.log.info('No new repositories discovered to sync.');
         return;
       }
 
-      console.log(`Syncing ${toAdd.length} newly discovered repositories:`);
-      const scanner = new Scanner(store, config, graph, createProgressRenderer());
-
+      clack.log.step(`Syncing ${toAdd.length} newly discovered repositories:`);
       for (const item of toAdd) {
         config.addRepo(item.name, item.path);
-        console.log(`  + Registered: ${item.name} -> ${item.path}`);
+        clack.log.success(`Registered: ${item.name} -> ${item.path}`);
       }
       await config.save();
 
-      console.log('\nRunning initial full scan for new repositories...');
+      clack.log.step('Running initial full scan for new repositories...');
       const newNames = toAdd.map(item => item.name);
-      const result = await scanner.scanFull(newNames);
-      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+      const onProgress = createProgressRenderer();
+      const scanner = new Scanner(store, config, graph, onProgress);
+
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+
+      const result = await scanner.scanFull(newNames).catch((err) => {
+        onProgress.stop();
+        throw err;
+      });
+
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
+      clack.log.success(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
     });
 
   return program;
@@ -2343,3 +2632,54 @@ export async function loadContext(dir: string): Promise<{
 
   return { config, store, graph };
 }
+
+export function getStaleFilesCount(store: Store, dir: string): number {
+  try {
+    const files = store.getAllFiles();
+    let changedCount = 0;
+    for (const file of files) {
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) {
+          changedCount++;
+        }
+      } else {
+        changedCount++;
+      }
+    }
+    return changedCount;
+  } catch {
+    return 0;
+  }
+}
+
+export function checkAndPrintStaleness(store: Store, dir: string): void {
+  const staleCount = getStaleFilesCount(store, dir);
+  if (staleCount > 0) {
+    // Show up to 5 changed file names
+    const files = store.getAllFiles();
+    const changed: string[] = [];
+    for (const file of files) {
+      if (changed.length >= 5) break;
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) changed.push(file.path as string);
+      } else {
+        changed.push(`${file.path} (deleted)`);
+      }
+    }
+    const fileList = changed.length > 0
+      ? `\nChanged: ${changed.join(', ')}${staleCount > changed.length ? ` (and ${staleCount - changed.length} more)` : ''}`
+      : '';
+    console.warn(`⚠️  Warning: Graph index may be stale. ${staleCount} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.${fileList}\n`);
+  }
+}
+
+export function checkTryCatch(content: string, lineNum: number, startLine: number, isPython: boolean): boolean {
+  return coreCheckTryCatch(content, lineNum, startLine, isPython);
+}
+

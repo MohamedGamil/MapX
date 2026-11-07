@@ -11,6 +11,7 @@ const REF_TYPE_MAP: Record<string, string> = {
   implements: 'implements',
   call: 'call',
   instantiation: 'instantiation',
+  render: 'render',
 };
 
 interface ParseJob {
@@ -50,14 +51,15 @@ let nameByNodeId: Map<number, string>;
 
 function findAssetRoot(): string {
   const thisFile = fileURLToPath(import.meta.url);
-  if (existsSync(thisFile)) {
+  if (existsSync(thisFile) && !thisFile.startsWith('/$bunfs') && !thisFile.startsWith('bun:')) {
     return resolve(dirname(thisFile), '..', '..');
   }
   const binDir = dirname(process.execPath);
   const candidates = [
     binDir,
-    resolve(binDir, '..', 'share', 'mapx'),
-    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'),
+    resolve(binDir, '..'),                               // dev build project root
+    resolve(binDir, '..', 'share', 'mapx'),              // XDG system: /usr/local/share/mapx
+    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
   ];
   for (const dir of candidates) {
     if (existsSync(join(dir, 'wasm'))) return dir;
@@ -72,7 +74,14 @@ async function initParser(): Promise<void> {
   Parser = mod.Parser;
   Language = mod.Language;
   Query = mod.Query;
-  await Parser.init();
+  await Parser.init({
+    locateFile(path: string) {
+      if (path === 'web-tree-sitter.wasm') {
+        return resolve(assetRoot, 'wasm', 'web-tree-sitter.wasm');
+      }
+      return path;
+    }
+  });
   parserReady = true;
 }
 
