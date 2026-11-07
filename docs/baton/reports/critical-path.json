@@ -2956,9 +2956,81 @@
         "latestStart": 254,
         "latestFinish": 257,
         "slack": 248
+      },
+      {
+        "id": "M7-01",
+        "duration": 8,
+        "earliestStart": 0,
+        "earliestFinish": 8,
+        "latestStart": 232,
+        "latestFinish": 240,
+        "slack": 232
+      },
+      {
+        "id": "M7-02",
+        "duration": 8,
+        "earliestStart": 8,
+        "earliestFinish": 16,
+        "latestStart": 240,
+        "latestFinish": 248,
+        "slack": 232
+      },
+      {
+        "id": "M7-03",
+        "duration": 8,
+        "earliestStart": 8,
+        "earliestFinish": 16,
+        "latestStart": 240,
+        "latestFinish": 248,
+        "slack": 232
+      },
+      {
+        "id": "M7-04",
+        "duration": 3,
+        "earliestStart": 8,
+        "earliestFinish": 11,
+        "latestStart": 254,
+        "latestFinish": 257,
+        "slack": 246
+      },
+      {
+        "id": "M7-05",
+        "duration": 4,
+        "earliestStart": 8,
+        "earliestFinish": 12,
+        "latestStart": 250,
+        "latestFinish": 254,
+        "slack": 242
+      },
+      {
+        "id": "M7-06",
+        "duration": 6,
+        "earliestStart": 16,
+        "earliestFinish": 22,
+        "latestStart": 248,
+        "latestFinish": 254,
+        "slack": 232
+      },
+      {
+        "id": "M7-07",
+        "duration": 6,
+        "earliestStart": 16,
+        "earliestFinish": 22,
+        "latestStart": 251,
+        "latestFinish": 257,
+        "slack": 235
+      },
+      {
+        "id": "M7-98",
+        "duration": 3,
+        "earliestStart": 22,
+        "earliestFinish": 25,
+        "latestStart": 254,
+        "latestFinish": 257,
+        "slack": 232
       }
     ],
-    "totalEffort": 1684
+    "totalEffort": 1730
   },
   "remaining": {
     "duration": 51,
@@ -5894,15 +5966,87 @@
         "latestStart": 48,
         "latestFinish": 51,
         "slack": 48
+      },
+      {
+        "id": "M7-01",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 34,
+        "latestFinish": 34,
+        "slack": 34
+      },
+      {
+        "id": "M7-02",
+        "duration": 8,
+        "earliestStart": 0,
+        "earliestFinish": 8,
+        "latestStart": 34,
+        "latestFinish": 42,
+        "slack": 34
+      },
+      {
+        "id": "M7-03",
+        "duration": 8,
+        "earliestStart": 0,
+        "earliestFinish": 8,
+        "latestStart": 34,
+        "latestFinish": 42,
+        "slack": 34
+      },
+      {
+        "id": "M7-04",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 51,
+        "latestFinish": 51,
+        "slack": 51
+      },
+      {
+        "id": "M7-05",
+        "duration": 4,
+        "earliestStart": 0,
+        "earliestFinish": 4,
+        "latestStart": 44,
+        "latestFinish": 48,
+        "slack": 44
+      },
+      {
+        "id": "M7-06",
+        "duration": 6,
+        "earliestStart": 8,
+        "earliestFinish": 14,
+        "latestStart": 42,
+        "latestFinish": 48,
+        "slack": 34
+      },
+      {
+        "id": "M7-07",
+        "duration": 6,
+        "earliestStart": 8,
+        "earliestFinish": 14,
+        "latestStart": 45,
+        "latestFinish": 51,
+        "slack": 37
+      },
+      {
+        "id": "M7-98",
+        "duration": 3,
+        "earliestStart": 14,
+        "earliestFinish": 17,
+        "latestStart": 48,
+        "latestFinish": 51,
+        "slack": 34
       }
     ],
-    "totalEffort": 201
+    "totalEffort": 236
   },
   "resourceSchedule": {
-    "hours": 201,
-    "weeks": 10.05,
-    "forecastAsOf": "2026-11-05",
-    "conditionalDate": "2027-01-14",
+    "hours": 236,
+    "weeks": 11.8,
+    "forecastAsOf": "2026-11-07",
+    "conditionalDate": "2027-01-28",
     "assignments": [
       {
         "id": "M0-01",
@@ -7853,6 +7997,54 @@
         "worker": 0,
         "start": 198,
         "finish": 201
+      },
+      {
+        "id": "M7-01",
+        "worker": 0,
+        "start": 201,
+        "finish": 201
+      },
+      {
+        "id": "M7-02",
+        "worker": 0,
+        "start": 201,
+        "finish": 209
+      },
+      {
+        "id": "M7-03",
+        "worker": 0,
+        "start": 209,
+        "finish": 217
+      },
+      {
+        "id": "M7-04",
+        "worker": 0,
+        "start": 217,
+        "finish": 217
+      },
+      {
+        "id": "M7-05",
+        "worker": 0,
+        "start": 217,
+        "finish": 221
+      },
+      {
+        "id": "M7-06",
+        "worker": 0,
+        "start": 221,
+        "finish": 227
+      },
+      {
+        "id": "M7-07",
+        "worker": 0,
+        "start": 227,
+        "finish": 233
+      },
+      {
+        "id": "M7-98",
+        "worker": 0,
+        "start": 233,
+        "finish": 236
       }
     ]
   }

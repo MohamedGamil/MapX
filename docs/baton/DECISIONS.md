@@ -454,3 +454,15 @@ An explicit `policy.uncovered.externals` always wins.
 - **`npm run test:ui` stays outside `npm run check`.** It runs in CI's UI job, and when a task registers it. Any task that changes edges or the dashboard should register it (the lesson of M2-12-R1), but this is not a gate.
 - **The D041/D042 P2 batch is paused.** M2-20-R1, M2-21, M2-27, M2-28, M2-12-R2 and M2-14 stay BACKLOG, each with an owner-hold blocking condition, until the owner resumes them. D042's commit-per-item instruction applies again when work resumes.
 - **Next work: none.** The P3 follow-ups, M6 (D038) and M4-13-R1 (D035) stay held, and so does M2-29-R1, until the owner asks.
+
+## D045 — Milestone M7: a GitHub Pages site; stack and URL are agent defaults awaiting owner confirmation (2026-11-07)
+
+The owner asked for a complete GitHub Pages site (landing, About the author, docs) and to plan and start it. It is registered as milestone **M7** (M7-01 … M7-07, M7-98; M7-04 cancelled) and M7-01 was started. The owner did not choose a stack or an address, so these are the agent's defaults. They stay cheap to change until M7-03 builds on them:
+
+- **Generator:** VitePress 1.6.4 (MIT), in its own `site/` package with its own lockfile. The root install, `npm run check` and the npm package do not see it.
+- **Content:** `docs/` stays the source of the guides (an explicit allowlist in `scripts/site/sync-docs.ts`; `docs/baton`, `docs/research` and `docs/reports` are never published).
+- **Address:** `https://mohamedgamil.github.io/mapx/`. The base path is `SITE_BASE` and the origin `SITE_URL`, so a custom domain is a configuration change.
+- **Deploy:** from `main` and by manual dispatch (M7-05). Enabling Pages (Settings, Pages, Source: GitHub Actions) and pushing to `main` are the owner's actions (D007 covers releases; pushing was never delegated).
+- **No About page (owner, 2026-11-07):** M7-04 is CANCELLED. The footer of the site says that MapX is created by Mohamed Gamil and links https://gamil.io. The owner chose this knowing that gamil.io served an expired TLS certificate on 2026-11-07 (R08).
+
+Owner to confirm or overrule: the stack, the address, and whether the site should also rebuild from `develop`.

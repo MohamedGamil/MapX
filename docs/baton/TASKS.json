@@ -42,6 +42,11 @@
       "id": "M6",
       "title": "Dashboard graph scale and readability",
       "goal": "The dashboard's graph views and Architecture screen stay fast on large codebases (100,000+ files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load."
+    },
+    {
+      "id": "M7",
+      "title": "Public website on GitHub Pages",
+      "goal": "A landing page, a documentation section built from docs/, and an About the author page, built by one command and deployed by a GitHub Actions workflow to GitHub Pages; every figure on the site is read from the code, and the site is checked for dead links, accessibility and size."
     }
   ],
   "gates": [
@@ -35287,6 +35292,618 @@
       "verificationCommands": [
         "npx vitest run tests/config.test.ts tests/legacy-globs.test.ts",
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude-site",
+      "actualHours": null,
+      "startedAt": "2026-11-06T23:20:08.587Z",
+      "completedAt": "2026-11-07T00:03:30.997Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M7-01.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/site-build.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-01.md"
+        },
+        {
+          "command": "npm run site:build",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-01.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-01.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-06T23:20:08.050Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-06T23:20:08.587Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:03:30.518Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:03:30.997Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/site-build.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-01.md"
+            },
+            {
+              "command": "npm run site:build",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-01.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-01.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-01",
+      "title": "Site scaffold, brand theme and one-command build (site/ workspace)",
+      "objective": "An isolated `site/` VitePress workspace with the MapX brand, a sync step that copies the published docs into it, and `npm run site:build` producing a static site under `site/.vitepress/dist` whose links honour a configurable base path.",
+      "description": "Owner request 2026-11-07: a complete GitHub Pages site (landing, docs, about the author). The site lives in its own package (own package.json and lockfile) so the root install, `npm run check` and the published tarball (`files` whitelist) are unaffected. Base path comes from `SITE_BASE` (default `/mapx/` for https://mohamedgamil.github.io/mapx/) so a custom domain later is a one-variable change. Brand tokens come from assets/brand and the dashboard design system (M4-17). Owner decision 2026-11-07 (D045): there is no About page; the footer says who created MapX and links https://gamil.io.",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "area": [
+        "site",
+        "docs",
+        "build"
+      ],
+      "dependencies": [],
+      "outputs": [
+        "site/package.json",
+        "site/.vitepress/config.ts",
+        "site/.vitepress/theme/**",
+        "scripts/site/sync-docs.ts",
+        "tests/site-build.test.ts",
+        "reports/M7-01.md"
+      ],
+      "affectedFiles": [
+        "site/**",
+        "scripts/site/**",
+        "tests/site-build.test.ts",
+        "package.json",
+        ".gitignore",
+        ".npmignore",
+        "docs/mcp-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "`npm run site:build` in a clean clone (after `npm ci` in site/) exits 0 and writes index.html, docs/index.html and 404.html under the output folder (tests/site-build.test.ts builds into a temp dir and asserts the files).",
+        "With `SITE_BASE=/x/` every asset and internal href in index.html starts with `/x/`; with the default it starts with `/mapx/` (test greps the built HTML for any href or src not under the base).",
+        "`npm pack --dry-run --json` lists no file under site/, and `npm run check` is unchanged in outcome with site/node_modules absent (test + command).",
+        "The footer of the built home page and docs index says MapX was created by Mohamed Gamil and links https://gamil.io with rel=\"noopener\"; the nav has no About entry and no /about page is built (test on built HTML; the 404 page is rendered in the browser and is checked by M7-06).",
+        "Mutation check: pointing the base at `/` fails the base-path test."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-build.test.ts",
+        "npm run site:build",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-02",
+      "title": "Documentation section built from docs/ with sidebar, search and link rewriting",
+      "objective": "The eleven user-facing guides in docs/ publish under /docs/ with a sidebar, local search, \"edit on GitHub\" links and the package version; links to files that are not published become GitHub blob URLs, and a link that reaches nothing fails the build.",
+      "description": "docs/ stays the single source of truth (D001 keeps specs/ frozen; docs/baton, docs/research and docs/reports are internal records and are never published). The sync step uses an explicit allowlist, not a denylist, so a new internal folder cannot leak. tests/docs-surface.test.ts already checks relative links inside the repo; this task checks them in the built site.",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "area": [
+        "site",
+        "docs"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-01",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "scripts/site/sync-docs.ts",
+        "site/.vitepress/sidebar.ts",
+        "tests/site-docs.test.ts",
+        "reports/M7-02.md"
+      ],
+      "affectedFiles": [
+        "scripts/site/**",
+        "site/.vitepress/**",
+        "tests/site-docs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each of the 11 guides in docs/*.md has a built page under docs/ and a sidebar entry; no page exists for anything under docs/baton, docs/research, docs/reports or specs/ (test lists the output and compares it with the allowlist).",
+        "A relative link in a guide to an unpublished repo file (for example ../CHANGELOG.md) is rewritten to https://github.com/MohamedGamil/mapx/blob/main/CHANGELOG.md; a link to a missing file or heading fails `npm run site:build` with the file and line (test with a temp copy holding one bad link).",
+        "Search returns docs/architecture-rules.md for the query \"layers\" in the built site (Playwright or index-content test).",
+        "Every page shows the version read from VERSION and an edit link naming its source file (test).",
+        "On a guide page with a sidebar the footer credit (\"created by Mohamed Gamil\", link to https://gamil.io) is visible at 1280 px and at 360 px (Playwright spec; the default theme hides the footer when a sidebar exists, brand.css overrides that)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-docs.test.ts",
+        "npm run site:build"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-03",
+      "title": "Landing page: hero, capabilities, install, integrations",
+      "objective": "The home page presents what MapX is and how to start in one screen, with every count (MCP tools, languages, frameworks, presets) read from the code at build time rather than typed.",
+      "description": "Content is drawn from README.md (\"Why MapX?\", install, MCP and CLI examples) and the dashboard. Hero, three-to-four capability blocks (local index, MCP answers, incremental sync, architecture rules in CI), install block with the commands the README documents (tested verbatim by tests/helpers/installer-docs.ts), supported-languages grid, agent integrations list, links to docs, GitHub and npm. Light and dark themes; usable at 360 px.",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "area": [
+        "site",
+        "ui"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-01",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "site/index.md",
+        "site/.vitepress/theme/components/**",
+        "scripts/site/site-facts.ts",
+        "tests/site-landing.test.ts",
+        "reports/M7-03.md"
+      ],
+      "affectedFiles": [
+        "site/index.md",
+        "site/.vitepress/theme/**",
+        "scripts/site/**",
+        "tests/site-landing.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The built home page states the MCP tool count, language count, framework count and preset count, and each equals the value the code reports (the same sources tests/docs-surface.test.ts uses); changing a count source makes the test fail (mutation check).",
+        "The install commands on the page equal those in README.md (test compares the strings).",
+        "At 360 px and 1280 px, in light and dark, the page has no horizontal scroll and the h1 is visible without scrolling (Playwright spec).",
+        "The page has one h1, a meta description of 50-160 characters and an Open Graph title and description (test on built HTML)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-landing.test.ts",
+        "npm run site:build"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "CANCELLED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-06T23:36:50.861Z",
+          "from": "BACKLOG",
+          "to": "CANCELLED",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-04",
+      "title": "About the author page (Mohamed Gamil)",
+      "objective": "An /about/ page that introduces Mohamed Gamil, the author and maintainer of MapX, using only facts the owner has published, with links to GitHub, LinkedIn, the other pinned projects and the contact route.",
+      "description": "Verified facts as of 2026-11-07 (GitHub profile): name Mohamed Gamil, bio \"Building stuff for scale.\", location Egypt, LinkedIn in/mogamil, other projects slug-generator and git-purge. package.json lists https://gamil.io as the author URL, but that site returned an expired TLS certificate on 2026-11-07, so the page does not link it until the owner fixes it (recorded in RISKS). No title, employer or biography is invented: a longer bio is an owner input, and the page is written so that adding one is a one-file edit (site/about.md).",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "area": [
+        "site",
+        "docs"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-01",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "site/about.md",
+        "tests/site-about.test.ts",
+        "reports/M7-04.md"
+      ],
+      "affectedFiles": [
+        "site/about.md",
+        "site/.vitepress/config.ts",
+        "tests/site-about.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The built /about/ page contains the name \"Mohamed Gamil\", the GitHub and LinkedIn links, and links to MapX, slug-generator and git-purge repositories (test on built HTML).",
+        "Every external link on the page is https, carries rel=\"noopener\", and none targets gamil.io while the owner has not confirmed it (test; the host list is a constant the owner edits).",
+        "The nav and the footer link to /about/ (test).",
+        "Every claim on the page appears in the verified-facts list in the iteration spec (reviewer checks; no invented employer, title or dates)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-about.test.ts",
+        "npm run site:build"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-05",
+      "title": "GitHub Pages deploy workflow and CI build check",
+      "objective": "A workflow that builds the site and deploys it to GitHub Pages from main (and on manual dispatch), plus a CI job that builds the site on any pull request or push that touches the site or docs, so a broken site never reaches main.",
+      "description": "Uses the official actions (configure-pages, upload-pages-artifact, deploy-pages) with least-privilege permissions (contents: read, pages: write, id-token: write) and the `github-pages` environment. Node 20 as in ci.yml. Deploy runs on main only; releases are owner-initiated (D007), so docs on Pages track main, not develop. Enabling Pages (Settings, Pages, Source: GitHub Actions) and the first push to main are owner actions (external, not a blocker for this task): this task proves the workflow by static validation and a local build with the workflow's own commands.",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 6
+      },
+      "area": [
+        "site",
+        "ci"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-01",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        ".github/workflows/pages.yml",
+        ".github/workflows/ci.yml",
+        "tests/site-workflow.test.ts",
+        "reports/M7-05.md"
+      ],
+      "affectedFiles": [
+        ".github/workflows/pages.yml",
+        ".github/workflows/ci.yml",
+        "tests/site-workflow.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "pages.yml parses as YAML; triggers are push to main and workflow_dispatch only; permissions are exactly contents: read, pages: write, id-token: write; the deploy job names environment github-pages (test).",
+        "Every `run:` command in the build job is one the test also executes locally in a temp clone (npm ci in site/, npm run site:build) and exits 0.",
+        "ci.yml gains a Site job that runs on pull_request and push for paths site/**, docs/**, README.md, VERSION and scripts/site/** and runs the same build (test on the YAML).",
+        "Third-party actions are pinned to a major version tag from github.com/actions only (test).",
+        "Mutation check: adding `contents: write` to pages.yml fails the permissions test."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-workflow.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-06",
+      "title": "Site quality: SEO, accessibility, links and size budgets",
+      "objective": "The built site ships a sitemap, robots.txt, canonical URLs, favicon, Open Graph image and a 404 page; it has no dead internal links, no axe violations on the landing, docs and about pages, and stays inside a size budget.",
+      "description": "axe-core and Playwright are already dev dependencies (M4-19). The site gets its own Playwright config so `npm run test:ui` (dashboard) is unchanged. The canonical origin comes from `SITE_URL` (default https://mohamedgamil.github.io). Budgets are set from the measured M7-03 build and recorded in the report, never loosened to pass.",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "area": [
+        "site",
+        "ui",
+        "eval"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-02",
+          "type": "hard"
+        },
+        {
+          "id": "M7-03",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "tests/site/quality.spec.ts",
+        "playwright.site.config.ts",
+        "tests/site-links.test.ts",
+        "reports/M7-06.md"
+      ],
+      "affectedFiles": [
+        "tests/site/**",
+        "tests/site-links.test.ts",
+        "playwright.site.config.ts",
+        "site/.vitepress/config.ts",
+        "site/public/**"
+      ],
+      "acceptanceCriteria": [
+        "sitemap.xml lists every built page with absolute URLs under SITE_URL + base; robots.txt references it; each page has a canonical link equal to its sitemap entry (test).",
+        "A crawl of the built site from index.html follows every internal link and finds no 404 (tests/site-links.test.ts); a deliberately broken link fails it.",
+        "axe-core reports 0 serious or critical violations on / and /docs/getting-started, in light and dark (Playwright spec).",
+        "Total built size and the home page transfer size stay at or under the budgets in the report (test reads the budgets from one constant).",
+        "The 404 page, loaded in a browser, shows the footer credit and a link back to the home page under the site base (Playwright spec)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-links.test.ts",
+        "npx playwright test -c playwright.site.config.ts"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P3",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-07",
+      "title": "Landing media: dashboard screenshots generated from a fixture",
+      "objective": "The landing page shows real screenshots of the dashboard (graph, architecture, clusters) generated by a script from a repository fixture, not hand-captured, so they can be regenerated after a UI change.",
+      "description": "Reuses the Playwright harness (M4-19) and a synthetic fixture (never private code). Images are committed as optimised WebP with a recorded generation command. P3: the landing ships without them in M7-03 using existing docs/images and the logo.",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "area": [
+        "site",
+        "ui"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-03",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "scripts/site/gen-screenshots.ts",
+        "site/public/img/**",
+        "reports/M7-07.md"
+      ],
+      "affectedFiles": [
+        "scripts/site/**",
+        "site/public/img/**",
+        "site/index.md"
+      ],
+      "acceptanceCriteria": [
+        "Running the script twice on the same fixture produces screenshots whose pixel diff is under 1 percent (test) and each image is at most 150 KiB.",
+        "Each image has meaningful alt text and the landing page references all of them (test on built HTML)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-landing.test.ts",
+        "npm run site:build"
+      ]
+    },
+    {
+      "milestone": "M7",
+      "priority": "P1",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "README.md",
+        "docs/getting-started.md",
+        "package.json",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M7-98",
+      "title": "M7 acceptance: clean-clone build of the whole site and deploy readiness",
+      "objective": "From a fresh clone, build the site, verify every page, link, budget and workflow check, and list the owner steps still needed to go live.",
+      "description": "Milestone acceptance for M7.",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 4
+      },
+      "area": [
+        "site",
+        "docs"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-05",
+          "type": "quality"
+        },
+        {
+          "id": "M7-06",
+          "type": "quality"
+        }
+      ],
+      "outputs": [
+        "reports/M7-98.md"
+      ],
+      "affectedFiles": [
+        "docs/baton/reports/M7-98.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "In a clean clone, `npm ci --legacy-peer-deps`, `npm ci` in site/ and `npm run site:build` exit 0 and every M7 test and spec passes; the report lists each exit code.",
+        "The report states the live URL the workflow will publish and the owner steps still open (enable Pages with source GitHub Actions, push to main, renew the gamil.io certificate)."
+      ],
+      "verificationCommands": [
+        "npm run check",
+        "npm run site:build"
       ]
     }
   ]

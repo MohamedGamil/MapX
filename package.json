@@ -116,7 +116,10 @@
     "plan:handoff": "tsx scripts/baton/cli.ts handoff",
     "plan:transition": "tsx scripts/baton/cli.ts transition",
     "plan:scan": "node .claude/skills/baton/scripts/baton-scan.mjs docs/baton/TASKS.json",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "site:sync": "tsx scripts/site/sync-docs.ts",
+    "site:build": "npm run site:sync && npm --prefix site run build",
+    "site:dev": "npm run site:sync && npm --prefix site run dev"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",

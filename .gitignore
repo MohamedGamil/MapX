@@ -61,3 +61,9 @@ tests/fixtures/**/.mapx/*
 !tests/fixtures/**/.mapx/*.jsonc
 !tests/fixtures/**/.mapx/architecture.baseline.json
 !tests/fixtures/**/.mapx/architecture/
+
+# The GitHub Pages site (M7-01): installed, generated and cached folders
+site/node_modules/
+site/docs/
+site/.vitepress/cache/
+site/.vitepress/dist/

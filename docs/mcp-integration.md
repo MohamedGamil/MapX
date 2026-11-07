@@ -46,7 +46,7 @@ On startup, prints the SSE URL, messages endpoint, and ready-to-copy configurati
 
 Both modes print configuration snippets on startup:
 
-```
+````
   MapxGraph MCP server ready.
 
   Transport:    stdio
@@ -66,7 +66,7 @@ Both modes print configuration snippets on startup:
 
   Cursor / VS Code (.cursor/mcp.json or settings.json):
   ...
-```
+````
 
 SSE mode additionally prints:
 ```

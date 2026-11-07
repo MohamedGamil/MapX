@@ -352,3 +352,11 @@ flowchart LR
 - M5-24-R6 ← M5-24-R1 (hard)
 - M2-29 ← M2-23 (hard)
 - M2-29-R1 ← M2-29 (hard)
+- M7-01 ← none
+- M7-02 ← M7-01 (hard)
+- M7-03 ← M7-01 (hard)
+- M7-04 ← M7-01 (hard)
+- M7-05 ← M7-01 (hard)
+- M7-06 ← M7-02 (hard), M7-03 (hard)
+- M7-07 ← M7-03 (hard)
+- M7-98 ← M7-05 (quality), M7-06 (quality)

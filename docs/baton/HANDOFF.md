@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@0cf7cab8a26f014ffb0b04fbf99cc3627901ac95 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@7782e93aa5a7ea835baf39538901a8af57605e91 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M2-29 — Laravel migrations, seeders, factories and views are indexed by default.
-Evidence: `npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts` (exit 0) → docs/baton/reports/M2-29.md; `npm run check` (exit 0) → docs/baton/reports/M2-29.md.
+Last completed: M7-01 — Site scaffold, brand theme and one-command build (site/ workspace).
+Evidence: `npx vitest run tests/site-build.test.ts` (exit 0) → docs/baton/reports/M7-01.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-01.md; `npm run check` (exit 0) → docs/baton/reports/M7-01.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M6-01 — Large-graph fixtures and baseline measurements for the graph and Architecture views. Prerequisites: M4-20, M5-15. Read docs/baton/iterations/M6-01.md. Objective: Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap. Expected outputs: scripts/ui/gen-large-workspace.ts; tests/ui/perf-scale.spec.ts; reports/M6-01.md. Verify: `npx playwright test tests/ui/perf-scale.spec.ts`.
-Also eligible: M0-07-R6, M2-08-R10, M2-15, M2-17, M2-18.
+Also eligible: M7-02, M7-03, M7-05, M0-07-R6, M2-08-R10.
 Active work: none. One active iteration per owner.
 
 ## Observe

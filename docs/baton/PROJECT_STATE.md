@@ -1,6 +1,10 @@
 # MapX project state
 
-Updated 2026-11-05 (P2 defects, D041/D042; D043; D044: batch paused). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
+Updated 2026-11-07 (M7: GitHub Pages site). Owner request: a landing page, docs pages and a footer credit for the author; the About page was dropped (D045). **M7-01 is DONE** (site scaffold, brand theme, `npm run site:build`; report `reports/M7-01.md`). Next in M7: M7-02 (docs section), M7-03 (landing), M7-05 (deploy workflow), then M7-06, M7-07 (P3) and M7-98. M7-04 (About page) is CANCELLED. Nothing is committed, pushed or deployed. Going live needs the owner: enable Pages with source GitHub Actions, push to `main`, and renew the gamil.io certificate (R08). The stack and address are agent defaults awaiting confirmation (D045). The D044 holds (P2 batch, M6, M4-13-R1) are unchanged.
+
+Latest validation: `npm run check` exits 0 (333 tasks, 162 files, 3563 passed, 4 skipped).
+
+Earlier: Updated 2026-11-05 (P2 defects, D041/D042; D043; D044: batch paused). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 
 - **D044 (2026-11-05): no work is active.** The P2 batch is paused, with M2-14, M2-20-R1, M2-21, M2-27, M2-28 and M2-12-R2 left. M2-29-R1 is decided (re-running `mapx init` removes the former Laravel defaults) but not started. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held. `npm run test:ui` stays outside `npm run check`.
 - **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item.

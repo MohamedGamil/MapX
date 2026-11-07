@@ -362,3 +362,16 @@ The dashboard's graph views and Architecture screen stay fast on large codebases
 - **M6-09** UI performance budgets that hold under machine load — BACKLOG, P2, 6h; depends on M6-01.
 - **M6-98** M6 acceptance: re-measure graph and Architecture views against the M6-01 baselines — BACKLOG, P1, 3h; depends on M6-04, M6-05, M6-06, M6-07, M6-08, M6-09.
 
+## M7 — Public website on GitHub Pages
+
+A landing page, a documentation section built from docs/, and an About the author page, built by one command and deployed by a GitHub Actions workflow to GitHub Pages; every figure on the site is read from the code, and the site is checked for dead links, accessibility and size.
+
+- **M7-01** Site scaffold, brand theme and one-command build (site/ workspace) — DONE, P1, 8h; depends on nothing.
+- **M7-02** Documentation section built from docs/ with sidebar, search and link rewriting — BACKLOG, P1, 8h; depends on M7-01.
+- **M7-03** Landing page: hero, capabilities, install, integrations — BACKLOG, P1, 8h; depends on M7-01.
+- **M7-04** About the author page (Mohamed Gamil) — CANCELLED, P1, 3h; depends on M7-01.
+- **M7-05** GitHub Pages deploy workflow and CI build check — BACKLOG, P1, 4h; depends on M7-01.
+- **M7-06** Site quality: SEO, accessibility, links and size budgets — BACKLOG, P1, 6h; depends on M7-02, M7-03.
+- **M7-07** Landing media: dashboard screenshots generated from a fixture — BACKLOG, P3, 6h; depends on M7-03.
+- **M7-98** M7 acceptance: clean-clone build of the whole site and deploy readiness — BACKLOG, P1, 3h; depends on M7-05, M7-06.
+
