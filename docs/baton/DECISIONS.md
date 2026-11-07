@@ -465,4 +465,6 @@ The owner asked for a complete GitHub Pages site (landing, About the author, doc
 - **Deploy:** from `main` and by manual dispatch (M7-05). Enabling Pages (Settings, Pages, Source: GitHub Actions) and pushing to `main` are the owner's actions (D007 covers releases; pushing was never delegated).
 - **No About page (owner, 2026-11-07):** M7-04 is CANCELLED. The footer of the site says that MapX is created by Mohamed Gamil and links https://gamil.io. The owner chose this knowing that gamil.io served an expired TLS certificate on 2026-11-07 (R08).
 
+- **No required status check (owner, 2026-11-07):** the `Site` job is not to be a required check for `main`; the Pages workflow does not wait for it. A broken site still fails the Pages build.
+
 Owner to confirm or overrule: the stack, the address, and whether the site should also rebuild from `develop`.

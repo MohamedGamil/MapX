@@ -60,3 +60,15 @@ export function builtFileFor(out: string, base: string, pathname: string): strin
   for (const c of candidates) if (existsSync(join(out, c)) && statSync(join(out, c)).isFile()) return join(out, c);
   return null;
 }
+
+/** Builds the site the way the Pages workflow does: no SITE_OUT, no SITE_BASE, so the output lands in site/.vitepress/dist. */
+export function buildSiteDefaultOutput(): string {
+  const env = { ...process.env } as NodeJS.ProcessEnv;
+  delete env.SITE_OUT;
+  delete env.SITE_BASE;
+  withLock(() => {
+    const r = spawnSync('npm', ['run', 'site:build', '--silent'], { cwd: REPO, env, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`site:build exited ${r.status}\n${r.stdout}\n${r.stderr}`);
+  });
+  return join(REPO, 'site', '.vitepress', 'dist');
+}

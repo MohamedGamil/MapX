@@ -1,0 +1,73 @@
+# Publishes the site (landing page and guides) to GitHub Pages (M7-05).
+#
+# It runs on every push to main, because the landing page reads src/ and README.md as well as the
+# guides, and by hand. Releases are owner-initiated (D007), so the live site tracks main, not develop.
+# Settings, Pages, Source must be "GitHub Actions" once; until then the deploy job fails.
+# A manual run from another branch builds the site (a dry run) but does not deploy it.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The build job runs the repository's code and install scripts, so it only reads. The deploy job,
+# which runs no repository code, is the only one with the Pages and OIDC permissions.
+permissions:
+  contents: read
+
+# One deployment at a time; a deployment in progress is allowed to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+
+      # The root install is needed because `site:sync` runs the repository's own code (tsx) to read
+      # the counts the landing page shows.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
+      # SITE_BASE and SITE_URL stay unset: the defaults are the project page of this repository.
+      - name: Build site
+        run: npm run site:build
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/.vitepress/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    # The live site is main, whatever branch a manual run was started from.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

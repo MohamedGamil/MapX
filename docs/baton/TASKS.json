@@ -35801,15 +35801,74 @@
         "docs/baton/PROJECT_STATE.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-site",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-07T01:32:57.530Z",
+      "completedAt": "2026-11-07T01:55:07.845Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M7-05.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/site-workflow.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-05.md"
+        },
+        {
+          "command": "npm run site:build",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-05.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-05.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-07T01:32:57.058Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:32:57.530Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:55:07.301Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:55:07.845Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/site-workflow.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-05.md"
+            },
+            {
+              "command": "npm run site:build",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-05.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-05.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -35842,17 +35901,21 @@
       "affectedFiles": [
         ".github/workflows/pages.yml",
         ".github/workflows/ci.yml",
-        "tests/site-workflow.test.ts"
+        "tests/site-workflow.test.ts",
+        "package.json",
+        "package-lock.json"
       ],
       "acceptanceCriteria": [
-        "pages.yml parses as YAML; triggers are push to main and workflow_dispatch only; permissions are exactly contents: read, pages: write, id-token: write; the deploy job names environment github-pages (test).",
-        "Every `run:` command in the build job is one the test also executes locally in a temp clone (npm ci in site/, npm run site:build) and exits 0.",
-        "ci.yml gains a Site job that runs on pull_request and push for paths site/**, docs/**, README.md, VERSION and scripts/site/** and runs the same build (test on the YAML).",
-        "Third-party actions are pinned to a major version tag from github.com/actions only (test).",
-        "Mutation check: adding `contents: write` to pages.yml fails the permissions test."
+        "pages.yml parses as YAML; its triggers are push to main and workflow_dispatch only; the workflow-level permissions are exactly contents: read, the build job has none of its own, and the deploy job alone has pages: write and id-token: write; the deploy job names the environment github-pages, needs the build job and runs only for refs/heads/main (a manual run from another branch builds but does not deploy); concurrency group pages does not cancel a running deploy (tests/site-workflow.test.ts).",
+        "Every `run:` command of the Pages build job is one of a known list (`npm ci --legacy-peer-deps`, `npm ci --prefix site`, `npm run site:build`), every npm script it names exists in package.json, and `npm ci --dry-run --offline` succeeds for the root and for site/, which proves both lockfiles match their package.json (the test also shows the dry run fails for a drifted lockfile). The build itself is exercised by tests/site-build.test.ts.",
+        "ci.yml gains a Site job that runs on every CI run (the landing page reads src/ and README.md, so a path filter would miss real breakage): it installs the root and site/ dependencies and Chromium, runs the site vitest suites with REQUIRE_SITE=1 and the site Playwright config, and uploads the Playwright results on failure (test on the YAML).",
+        "Third-party actions in pages.yml and the Site job are pinned to a major version tag and come from github.com/actions only (test).",
+        "The uploaded artifact path is site/.vitepress/dist, and a build run as the workflow runs it (no SITE_OUT) writes index.html, 404.html and docs/index.html there (test); the build job runs with the same Node version as ci.yml.",
+        "Mutation check: adding `contents: write` to pages.yml, giving the build job the Pages permission, removing the main-only guard, removing REQUIRE_SITE from the Site job and pointing the artifact at another folder each fail a test."
       ],
       "verificationCommands": [
         "npx vitest run tests/site-workflow.test.ts",
+        "npm run site:build",
         "npm run check"
       ]
     },
