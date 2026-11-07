@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } 
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { buildSite } from './helpers/site-build';
-import { normaliseBase } from '../site/.vitepress/base';
+import { DEFAULT_BASE, normaliseBase } from '../site/.vitepress/base';
 import { GUIDES } from '../scripts/site/sync-docs';
 
 const ROOT = resolve(__dirname, '..');
@@ -60,11 +60,11 @@ run('site build (M7-01)', () => {
     }
   });
 
-  it('puts every site-root URL under the default base /mapx/', () => {
+  it('puts every site-root URL under the default base', () => {
     for (const page of ['index.html', 'docs/index.html', 'docs/getting-started.html']) {
       const urls = rootRelativeUrls(readFileSync(join(outDefault, page), 'utf8'));
       expect(urls.length, page).toBeGreaterThan(0);
-      expect(urls.filter((u) => !u.startsWith('/mapx/')), page).toEqual([]);
+      expect(urls.filter((u) => !u.startsWith(DEFAULT_BASE)), page).toEqual([]);
     }
   });
 
@@ -118,11 +118,20 @@ run('site build (M7-01)', () => {
   });
 });
 
+describe('the default base (first deployment)', () => {
+  // The one place the case is pinned. The GitHub repository is named `MapX` (package.json writes `mapx`,
+  // which GitHub accepts in URLs but GitHub Pages does not: the repository segment of a Pages address is
+  // case-sensitive, and `/mapx/` answers 404). Everything else reads DEFAULT_BASE.
+  it('has the case of the repository name on GitHub, which Pages is case-sensitive about', () => {
+    expect(DEFAULT_BASE).toBe('/MapX/');
+  });
+});
+
 describe('normaliseBase (M7-01)', () => {
   it.each([
-    [undefined, '/mapx/'],
-    ['', '/mapx/'],
-    ['  ', '/mapx/'],
+    [undefined, DEFAULT_BASE],
+    ['', DEFAULT_BASE],
+    ['  ', DEFAULT_BASE],
     ['/', '/'],
     ['//', '/'],
     ['x', '/x/'],

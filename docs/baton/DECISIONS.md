@@ -461,10 +461,12 @@ The owner asked for a complete GitHub Pages site (landing, About the author, doc
 
 - **Generator:** VitePress 1.6.4 (MIT), in its own `site/` package with its own lockfile. The root install, `npm run check` and the npm package do not see it.
 - **Content:** `docs/` stays the source of the guides (an explicit allowlist in `scripts/site/sync-docs.ts`; `docs/baton`, `docs/research` and `docs/reports` are never published).
-- **Address:** `https://mohamedgamil.github.io/mapx/`. The base path is `SITE_BASE` and the origin `SITE_URL`, so a custom domain is a configuration change.
-- **Deploy:** from `main` and by manual dispatch (M7-05). Enabling Pages (Settings, Pages, Source: GitHub Actions) and pushing to `main` are the owner's actions (D007 covers releases; pushing was never delegated).
+- **Address:** `https://mohamedgamil.github.io/MapX/` (corrected 2026-11-07: first written as `/mapx/`, which is a 404, see below). The base path is `SITE_BASE` and the origin `SITE_URL`, so a custom domain is a configuration change.
+- **Deploy:** from `develop` and by manual dispatch (M7-05, changed by M7-05-R1; first written as `main`, see below). Enabling Pages (Settings, Pages, Source: GitHub Actions) and pushing to `main` are the owner's actions (D007 covers releases; pushing was never delegated).
 - **No About page (owner, 2026-11-07):** M7-04 is CANCELLED. The footer of the site says that MapX is created by Mohamed Gamil and links https://gamil.io. The owner chose this knowing that gamil.io served an expired TLS certificate on 2026-11-07 (R08).
 
 - **No required status check (owner, 2026-11-07):** the `Site` job is not to be a required check for `main`; the Pages workflow does not wait for it. A broken site still fails the Pages build.
 
-Owner to confirm or overrule: the stack, the address, and whether the site should also rebuild from `develop`.
+- **First deployment, 2026-11-07 (owner report; M7-05-R1):** GitHub refused the deploy from `main`: the `github-pages` environment allows only `develop`, the repository's default branch. The owner chose **develop** as the deploy branch (the other option was to add `main` to the environment's branches). The same investigation found that the repository is named `MapX` and that a Pages address is case-sensitive in that segment, so the base path is `/MapX/`; the Pages build now derives it from `github.event.repository.name`.
+
+Owner to confirm or overrule: the stack and the address.

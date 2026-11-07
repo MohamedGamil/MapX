@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { buildSite } from './helpers/site-build';
 import { crawlSite, urlOf } from './helpers/site-crawl';
+import { DEFAULT_BASE } from '../site/.vitepress/base';
 
 const ROOT = resolve(__dirname, '..');
 const installed = existsSync(join(ROOT, 'site', 'node_modules', 'vitepress'));
@@ -114,7 +115,7 @@ run('the built site (M7-06)', () => {
   });
 
   it('has no dead link, missing asset or missing fragment, and no page that nothing links to', () => {
-    const r = crawlSite(join(tmp, 'out'), '/mapx/');
+    const r = crawlSite(join(tmp, 'out'), DEFAULT_BASE);
     expect(r.broken).toEqual([]);
     expect(r.orphans).toEqual([]);
     // The home page and 13 docs pages hold hundreds of references: a regex that stopped matching must fail.

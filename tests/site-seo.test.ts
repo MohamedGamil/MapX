@@ -8,6 +8,9 @@ import { join, relative, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { buildSite } from './helpers/site-build';
 import { GUIDES } from '../scripts/site/sync-docs';
+import { DEFAULT_BASE } from '../site/.vitepress/base';
+
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 import { folderBytes, urlOf } from './helpers/site-crawl';
 
 const ROOT = resolve(__dirname, '..');
@@ -100,7 +103,7 @@ run('built site: SEO and budgets (M7-06)', () => {
   });
 
   it('has a sitemap, robots.txt, canonical URLs and complete head tags, with the default origin and base', () => {
-    checkSite(out, 'https://mohamedgamil.github.io', '/mapx/');
+    checkSite(out, 'https://mohamedgamil.github.io', DEFAULT_BASE);
   });
 
   it('uses the configured origin and base everywhere (SITE_URL=https://example.org, SITE_BASE=/x/)', () => {
@@ -121,17 +124,18 @@ run('built site: SEO and budgets (M7-06)', () => {
     // (the hero image included), each gzipped as a server would send it.
     const html = readFileSync(join(out, 'index.html'), 'utf8');
     const loaded = new Set<string>();
-    for (const m of html.matchAll(/<(?:script|link)\s[^>]*?(?:src|href)="(\/mapx\/[^"]+\.(?:js|css))"/g)) loaded.add(m[1]!);
+    const under = escapeRe(DEFAULT_BASE);
+    for (const m of html.matchAll(new RegExp(`<(?:script|link)\\s[^>]*?(?:src|href)="(${under}[^"]+\\.(?:js|css))"`, 'g'))) loaded.add(m[1]!);
     // Images marked loading="lazy" (the screenshots, below the first screen) are not part of the first load.
     for (const m of html.matchAll(/<img\s[^>]*?>/g)) {
-      const src = /\ssrc="(\/mapx\/[^"]+)"/.exec(m[0])?.[1];
+      const src = new RegExp(`\\ssrc="(${under}[^"]+)"`).exec(m[0])?.[1];
       if (src && !/\sloading="lazy"/.test(m[0])) loaded.add(src);
     }
     expect(loaded.size, 'the home page loads scripts, styles and its image').toBeGreaterThan(3);
     expect([...loaded].some((u) => u.endsWith('.css') && !u.includes('/assets/')), 'vp-icons.css is counted').toBe(true);
     expect([...loaded].some((u) => u.endsWith('.png')), 'the hero image is counted').toBe(true);
     const transfer =
-      gzipSync(html).length + [...loaded].reduce((n, a) => n + gzipSync(readFileSync(join(out, a.replace('/mapx/', '')))).length, 0);
+      gzipSync(html).length + [...loaded].reduce((n, a) => n + gzipSync(readFileSync(join(out, a.slice(DEFAULT_BASE.length)))).length, 0);
     expect(transfer).toBeLessThanOrEqual(budgets.homeGzipBytes);
   });
 });

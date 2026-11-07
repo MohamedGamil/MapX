@@ -14,12 +14,14 @@ import { PRESETS } from '../src/arch/config.js';
 import { AgentGenerator } from '../src/agents/generator.js';
 import { buildSite, builtFileFor } from './helpers/site-build';
 import { SCREENSHOTS } from '../scripts/site/screenshot-list';
+import { DEFAULT_BASE } from '../site/.vitepress/base';
 import { AGENT_NAMES, LANGUAGE_NAMES, QUICKSTART_COMMANDS, agentKeys, languageIds, siteFacts, type SiteFacts } from '../scripts/site/site-facts';
 
 const ROOT = resolve(__dirname, '..');
 const SITE = join(ROOT, 'site');
 const installed = existsSync(join(SITE, 'node_modules', 'vitepress'));
 const run = installed || process.env.REQUIRE_SITE === '1' ? describe : describe.skip;
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
 
 /** The text of an HTML fragment with tags removed and the common entities decoded. */
@@ -146,7 +148,7 @@ run('built landing page (M7-03)', () => {
     const imgs = [...html.matchAll(/<img\s[^>]*?data-v-[^>]*?>|<img\s[^>]*?>/g)].map((m) => m[0]!).filter((t) => /\/img\/dashboard-/.test(t));
     expect(imgs).toHaveLength(SCREENSHOTS.length);
     for (const s of SCREENSHOTS) {
-      const tag = imgs.find((t) => t.includes(`/mapx/img/${s.file}`));
+      const tag = imgs.find((t) => t.includes(`${DEFAULT_BASE}img/${s.file}`));
       expect(tag, s.file).toBeDefined();
       const attr = (name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag!)?.[1];
       expect(text(attr('alt') ?? ''), `${s.file} alt`).toBe(s.alt);
@@ -156,7 +158,7 @@ run('built landing page (M7-03)', () => {
       expect(existsSync(join(tmp, 'out', 'img', s.file)), `${s.file} is built`).toBe(true);
       expect(html, s.file).toContain(s.caption);
       // The picture is shown small beside another: it is a link to the full-size file.
-      const link = new RegExp(`<a\\s[^>]*href="/mapx/img/${s.file.replace('.', '\\.')}"[^>]*>`).exec(html)?.[0];
+      const link = new RegExp(`<a\\s[^>]*href="${escapeRe(DEFAULT_BASE)}img/${s.file.replace('.', '\\.')}"[^>]*>`).exec(html)?.[0];
       expect(link, `${s.file} link`).toBeDefined();
       expect(link).toContain('rel="noopener"');
       expect(link).toContain('target="_blank"');
@@ -198,7 +200,7 @@ run('built landing page (M7-03)', () => {
   });
 
   it('resolves every link and image on the page to a built page, file and id', () => {
-    const base = '/mapx/';
+    const base = DEFAULT_BASE;
     const out = join(tmp, 'out');
     const refs = [
       ...[...html.matchAll(/<a [^>]*?\bhref="([^"]+)"/g)].map((m) => m[1]!),
@@ -225,12 +227,12 @@ run('built landing page (M7-03)', () => {
   });
 
   it('gives Open Graph an absolute image and this page its own url', () => {
-    expect(html).toMatch(/<meta property="og:image" content="https:\/\/mohamedgamil\.github\.io\/mapx\/og-card\.png"/);
-    expect(html).toMatch(/<meta property="og:url" content="https:\/\/mohamedgamil\.github\.io\/mapx\/"/);
+    expect(html).toContain(`<meta property="og:image" content="https://mohamedgamil.github.io${DEFAULT_BASE}og-card.png"`);
+    expect(html).toContain(`<meta property="og:url" content="https://mohamedgamil.github.io${DEFAULT_BASE}"`);
     expect(existsSync(join(tmp, 'out', 'og-card.png'))).toBe(true);
   });
 
   it('links the primary button to the getting-started guide under the base path', () => {
-    expect(html).toMatch(/href="\/mapx\/docs\/getting-started"/);
+    expect(html).toContain(`href="${DEFAULT_BASE}docs/getting-started"`);
   });
 });

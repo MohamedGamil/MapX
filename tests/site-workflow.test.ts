@@ -47,9 +47,11 @@ const commands = (job: Job) => job.steps.flatMap((s) => (s.run ? s.run.split('\n
 const OFFICIAL = /^actions\/[a-z][a-z-]*@v\d+$/;
 
 describe('pages.yml (M7-05)', () => {
-  it('runs on pushes to main and on manual dispatch, and on nothing else', () => {
+  it('runs on pushes to develop and on manual dispatch, and on nothing else', () => {
     expect(Object.keys(pages.on).sort()).toEqual(['push', 'workflow_dispatch']);
-    expect((pages.on.push as { branches: string[] }).branches).toEqual(['main']);
+    // develop: the branch the `github-pages` environment allows (its deployment-branch rule). The first
+    // deployment, from main, was refused: "Branch main is not allowed to deploy to github-pages".
+    expect((pages.on.push as { branches: string[] }).branches).toEqual(['develop']);
     expect((pages.on.push as { paths?: unknown }).paths).toBeUndefined();
   });
 
@@ -60,8 +62,8 @@ describe('pages.yml (M7-05)', () => {
     expect(pages.jobs.deploy!.permissions).toEqual({ pages: 'write', 'id-token': 'write' });
   });
 
-  it('deploys only from main, even when a manual run starts on another branch', () => {
-    expect(pages.jobs.deploy!.if).toBe("github.ref == 'refs/heads/main'");
+  it('deploys only from develop, even when a manual run starts on another branch', () => {
+    expect(pages.jobs.deploy!.if).toBe("github.ref == 'refs/heads/develop'");
     expect(pages.jobs.build!.if).toBeUndefined();
   });
 
@@ -103,7 +105,11 @@ describe('pages.yml (M7-05)', () => {
     expect(upload?.with?.path).toBe('site/.vitepress/dist');
     const node = (j: Job) => String(j.steps.find((s) => s.uses?.startsWith('actions/setup-node'))?.with?.['node-version']);
     expect(node(pages.jobs.build!)).toBe(node(ci.jobs.lint!));
-    expect(pages.jobs.build!.steps.some((s) => s.env && 'SITE_BASE' in s.env)).toBe(false);
+    // The base is the repository's name, so its case is always the one Pages serves (found by the first
+    // deployment: the repository is `MapX`, and `/mapx/` is a 404 on Pages).
+    const build = pages.jobs.build!.steps.find((s) => s.run === 'npm run site:build');
+    expect(build?.env?.SITE_BASE).toBe('/${{ github.event.repository.name }}/');
+    expect(pages.jobs.build!.steps.some((s) => s.env && 'SITE_URL' in s.env)).toBe(false);
   });
 
   // Builds as the workflow does (no SITE_OUT), so the uploaded path is proved, not assumed. Skipped

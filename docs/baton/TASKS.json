@@ -36265,6 +36265,10 @@
         {
           "id": "M7-06",
           "type": "quality"
+        },
+        {
+          "id": "M7-05-R1",
+          "type": "quality"
         }
       ],
       "outputs": [
@@ -36275,13 +36279,102 @@
         "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "In a clean clone, `npm ci --legacy-peer-deps`, `npm ci` in site/ and `npm run site:build` exit 0 and every M7 test and spec passes; the report lists each exit code.",
-        "The report states the live URL the workflow will publish and the owner steps still open (enable Pages with source GitHub Actions, push to main, renew the gamil.io certificate)."
+        "In a clean clone of the commit that holds M7-05-R1, `npm ci --legacy-peer-deps`, `npm ci --prefix site`, `npm run site:build` (the Pages build commands, with SITE_BASE set as the workflow sets it), the site vitest suites with REQUIRE_SITE=1, the site Playwright config and `npm run check` exit 0; the report lists each exit code.",
+        "The report states the address the workflow publishes (https://mohamedgamil.github.io/MapX/, from develop) and the owner steps still open (renew the gamil.io certificate; confirm the first run of the Pages workflow on develop)."
       ],
       "verificationCommands": [
         "npm run check",
         "npm run site:build"
       ]
+    },
+    {
+      "milestone": "M7",
+      "risk": "low",
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "approvalGate": null,
+      "id": "M7-05-R1",
+      "priority": "P1",
+      "title": "First Pages deployment: the environment refuses main, and the site base path has the wrong case",
+      "objective": "The Pages workflow deploys from the branch the github-pages environment allows (develop), and the site is built for the address Pages really serves (/MapX/, case-sensitive), with the case taken from the repository name.",
+      "description": "Found by the first real run (2026-11-07), reported by the owner: GitHub refused the deploy (\"Branch main is not allowed to deploy to github-pages due to environment protection rules\"). The environment has one custom branch policy, develop, which GitHub derived from the repository default branch. Reading the repository then showed a second defect that the first deployment would have hit next: the repository is named MapX, and a Pages address is case-sensitive in that segment (checked against a public site: /TypeScript-Website/ serves, /typescript-website/ is a 404), but the site was built for /mapx/, taken from the lowercase name in package.json without checking. Every asset URL would have been a 404. Owner decision (asked 2026-11-07): deploy from develop.",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "area": [
+        "site",
+        "ci"
+      ],
+      "dependencies": [
+        {
+          "id": "M7-05",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/baton/reports/M7-05.md",
+        "docs/baton/DECISIONS.md#D045",
+        ".github/workflows/pages.yml"
+      ],
+      "outputs": [
+        ".github/workflows/pages.yml",
+        "site/.vitepress/base.ts",
+        "tests/site-workflow.test.ts",
+        "tests/site-build.test.ts",
+        "reports/M7-05-R1.md"
+      ],
+      "affectedFiles": [
+        ".github/workflows/pages.yml",
+        "site/.vitepress/base.ts",
+        "tests/site-workflow.test.ts",
+        "tests/site-build.test.ts",
+        "tests/site-docs.test.ts",
+        "tests/site-landing.test.ts",
+        "tests/site-links.test.ts",
+        "tests/site-seo.test.ts",
+        "tests/site/serve.ts",
+        "docs/baton/**"
+      ],
+      "acceptanceCriteria": [
+        "pages.yml triggers on pushes to develop and manual dispatch only, and its deploy job runs only for refs/heads/develop (tests/site-workflow.test.ts); the repository's github-pages environment allows develop (read with `gh api repos/MohamedGamil/MapX/environments/github-pages/deployment-branch-policies`, recorded in the report).",
+        "The Pages build step sets SITE_BASE from the repository name (`/${{ github.event.repository.name }}/`), and the default base is `/MapX/`, the repository's case; one test pins that case and every other test and spec reads DEFAULT_BASE instead of a literal (test).",
+        "Mutation check: the default base back to /mapx/, the workflow without SITE_BASE or with a lowercase literal, a trigger that adds main, and a guard on main each fail a test.",
+        "The clean-clone acceptance (M7-98) is run again after this change, since the earlier run built for the wrong base."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/site-workflow.test.ts tests/site-build.test.ts",
+        "npx playwright test -c playwright.site.config.ts",
+        "npm run site:build",
+        "npm run check"
+      ],
+      "status": "IN_PROGRESS",
+      "owner": "claude-site",
+      "actualHours": null,
+      "startedAt": "2026-11-07T03:46:05.940Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-07T03:46:05.509Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T03:46:05.940Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false
     }
   ]
 }

@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { chromium } from '@playwright/test';
 import { buildSite, REPO } from '../helpers/site-build.js';
+import { DEFAULT_BASE } from '../../site/.vitepress/base.js';
 
-export const BASE = '/mapx/';
+export const BASE = DEFAULT_BASE;
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',

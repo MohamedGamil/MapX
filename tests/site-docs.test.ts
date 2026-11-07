@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { buildSite, builtFileFor } from './helpers/site-build';
+import { DEFAULT_BASE } from '../site/.vitepress/base';
 import { GUIDE_META, GUIDES, REPO_BLOB, rewriteLinks, syncDocs } from '../scripts/site/sync-docs';
 
 const ROOT = resolve(__dirname, '..');
@@ -171,7 +172,7 @@ describe('syncDocs (M7-02)', () => {
 run('built documentation (M7-02)', () => {
   let tmp = '';
   let out = '';
-  const base = '/mapx/';
+  const base = DEFAULT_BASE;
   const version = readFileSync(join(ROOT, 'VERSION'), 'utf8').trim();
   const page = (name: string) => readFileSync(join(out, 'docs', `${name}.html`), 'utf8');
 

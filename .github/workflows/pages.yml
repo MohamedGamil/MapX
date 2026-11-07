@@ -1,14 +1,17 @@
 # Publishes the site (landing page and guides) to GitHub Pages (M7-05).
 #
-# It runs on every push to main, because the landing page reads src/ and README.md as well as the
-# guides, and by hand. Releases are owner-initiated (D007), so the live site tracks main, not develop.
+# It runs on every push to develop, because the landing page reads src/ and README.md as well as the
+# guides, and by hand. The live site tracks develop, the branch the project works on (owner decision,
+# 2026-11-07). The `github-pages` environment allows only the branches listed under Settings,
+# Environments, github-pages, Deployment branches: it allows develop, and a deploy from any other branch
+# is refused by GitHub ("Branch ... is not allowed to deploy to github-pages").
 # Settings, Pages, Source must be "GitHub Actions" once; until then the deploy job fails.
 # A manual run from another branch builds the site (a dry run) but does not deploy it.
 name: Pages
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
 
 # The build job runs the repository's code and install scripts, so it only reads. The deploy job,
@@ -46,9 +49,13 @@ jobs:
       - name: Install site dependencies
         run: npm ci --prefix site
 
-      # SITE_BASE and SITE_URL stay unset: the defaults are the project page of this repository.
+      # The base path is the repository's own name, case included: a Pages address is case-sensitive in
+      # that segment, and this repository is "MapX" (a site built for /mapx/ would 404 on every asset).
+      # SITE_URL stays unset: the default is this account's Pages host.
       - name: Build site
         run: npm run site:build
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}/
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
@@ -59,8 +66,8 @@ jobs:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
-    # The live site is main, whatever branch a manual run was started from.
-    if: github.ref == 'refs/heads/main'
+    # The live site is develop, whatever branch a manual run was started from.
+    if: github.ref == 'refs/heads/develop'
     permissions:
       pages: write
       id-token: write
