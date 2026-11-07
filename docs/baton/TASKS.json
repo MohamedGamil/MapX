@@ -35437,15 +35437,84 @@
         "docs/baton/PROJECT_STATE.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-site",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-07T00:12:47.795Z",
+      "completedAt": "2026-11-07T00:48:56.366Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M7-02.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/site-docs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-02.md"
+        },
+        {
+          "command": "npx playwright test -c playwright.site.config.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-02.md"
+        },
+        {
+          "command": "npm run site:build",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-02.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-02.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-07T00:12:46.363Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:12:47.795Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:48:55.832Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:48:56.366Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/site-docs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-02.md"
+            },
+            {
+              "command": "npx playwright test -c playwright.site.config.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-02.md"
+            },
+            {
+              "command": "npm run site:build",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-02.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-02.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -35473,23 +35542,31 @@
         "scripts/site/sync-docs.ts",
         "site/.vitepress/sidebar.ts",
         "tests/site-docs.test.ts",
+        "tests/site/docs.spec.ts",
+        "playwright.site.config.ts",
         "reports/M7-02.md"
       ],
       "affectedFiles": [
         "scripts/site/**",
         "site/.vitepress/**",
-        "tests/site-docs.test.ts"
+        "tests/site-docs.test.ts",
+        "tests/site/**",
+        "tests/site-build.test.ts",
+        "playwright.site.config.ts"
       ],
       "acceptanceCriteria": [
-        "Each of the 11 guides in docs/*.md has a built page under docs/ and a sidebar entry; no page exists for anything under docs/baton, docs/research, docs/reports or specs/ (test lists the output and compares it with the allowlist).",
-        "A relative link in a guide to an unpublished repo file (for example ../CHANGELOG.md) is rewritten to https://github.com/MohamedGamil/mapx/blob/main/CHANGELOG.md; a link to a missing file or heading fails `npm run site:build` with the file and line (test with a temp copy holding one bad link).",
-        "Search returns docs/architecture-rules.md for the query \"layers\" in the built site (Playwright or index-content test).",
-        "Every page shows the version read from VERSION and an edit link naming its source file (test).",
+        "Each of the 11 guides in docs/*.md has a built page under docs/ and a sidebar entry; the set of built pages under docs/ equals the allowlist plus the index, and no page exists for anything under docs/baton, docs/research, docs/reports or specs/ (test lists the output).",
+        "A relative link in a guide to an unpublished repo file (for example ../README.md) is rewritten to https://github.com/MohamedGamil/mapx/blob/main/README.md; a link to a file that does not exist or that git does not track fails `npm run site:build` naming docs/<guide>.md and the line (unit tests of the rewriter, including linked images, quoted titles, angle brackets, fences and comments); `ignoreDeadLinks` is off, and a build of a throwaway project using the site configuration fails on a dead link between pages and passes once it is fixed.",
+        "Every internal link, image and #fragment in the built docs pages reaches an existing file and an existing id on it (crawl test over the built output; at least 200 references are checked). A missing heading is caught by this crawl and by tests/docs-surface.test.ts, not at sync time.",
+        "The built search index contains every guide and finds architecture-rules for the term \"layers\" (test over the built index; a Playwright search box test is M7-06).",
+        "Every built docs page shows the version read from VERSION in the navigation and an \"Edit this page\" link naming its source file under docs/ (the generated index has none).",
         "On a guide page with a sidebar the footer credit (\"created by Mohamed Gamil\", link to https://gamil.io) is visible at 1280 px and at 360 px (Playwright spec; the default theme hides the footer when a sidebar exists, brand.css overrides that)."
       ],
       "verificationCommands": [
         "npx vitest run tests/site-docs.test.ts",
-        "npm run site:build"
+        "npx playwright test -c playwright.site.config.ts",
+        "npm run site:build",
+        "npm run check"
       ]
     },
     {
@@ -35731,7 +35808,7 @@
       "id": "M7-06",
       "title": "Site quality: SEO, accessibility, links and size budgets",
       "objective": "The built site ships a sitemap, robots.txt, canonical URLs, favicon, Open Graph image and a 404 page; it has no dead internal links, no axe violations on the landing, docs and about pages, and stays inside a size budget.",
-      "description": "axe-core and Playwright are already dev dependencies (M4-19). The site gets its own Playwright config so `npm run test:ui` (dashboard) is unchanged. The canonical origin comes from `SITE_URL` (default https://mohamedgamil.github.io). Budgets are set from the measured M7-03 build and recorded in the report, never loosened to pass.",
+      "description": "axe-core and Playwright are already dev dependencies (M4-19). The site gets its own Playwright config (created by M7-02) so `npm run test:ui` (dashboard) is unchanged. The canonical origin comes from `SITE_URL` (default https://mohamedgamil.github.io). Budgets are set from the measured M7-03 build and recorded in the report, never loosened to pass.",
       "estimate": {
         "min": 4,
         "expected": 6,
@@ -35754,14 +35831,12 @@
       ],
       "outputs": [
         "tests/site/quality.spec.ts",
-        "playwright.site.config.ts",
         "tests/site-links.test.ts",
         "reports/M7-06.md"
       ],
       "affectedFiles": [
         "tests/site/**",
         "tests/site-links.test.ts",
-        "playwright.site.config.ts",
         "site/.vitepress/config.ts",
         "site/public/**"
       ],

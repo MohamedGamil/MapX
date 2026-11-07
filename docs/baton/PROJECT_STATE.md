@@ -1,8 +1,8 @@
 # MapX project state
 
-Updated 2026-11-07 (M7: GitHub Pages site). Owner request: a landing page, docs pages and a footer credit for the author; the About page was dropped (D045). **M7-01 is DONE** (site scaffold, brand theme, `npm run site:build`; report `reports/M7-01.md`). Next in M7: M7-02 (docs section), M7-03 (landing), M7-05 (deploy workflow), then M7-06, M7-07 (P3) and M7-98. M7-04 (About page) is CANCELLED. Nothing is committed, pushed or deployed. Going live needs the owner: enable Pages with source GitHub Actions, push to `main`, and renew the gamil.io certificate (R08). The stack and address are agent defaults awaiting confirmation (D045). The D044 holds (P2 batch, M6, M4-13-R1) are unchanged.
+Updated 2026-11-07 (M7: GitHub Pages site). Owner request: a landing page, docs pages and a footer credit for the author; the About page was dropped (D045). **M7-01 and M7-02 are DONE** (site scaffold and build; the documentation section with sidebar, search, link rewriting and GitHub-style anchors; reports `reports/M7-01.md`, `reports/M7-02.md`). Next in M7: M7-03 (landing), M7-05 (deploy workflow), then M7-06, M7-07 (P3) and M7-98. M7-04 (About page) is CANCELLED. M7-01 is committed on `develop`; nothing is pushed or deployed. Going live needs the owner: enable Pages with source GitHub Actions, push to `main`, and renew the gamil.io certificate (R08). The stack and address are agent defaults awaiting confirmation (D045). The D044 holds (P2 batch, M6, M4-13-R1) are unchanged.
 
-Latest validation: `npm run check` exits 0 (333 tasks, 162 files, 3563 passed, 4 skipped).
+Latest validation: `npm run check` exits 0 (333 tasks, 163 files, 3587 passed, 4 skipped); `npx playwright test -c playwright.site.config.ts` exits 0 (3 passed).
 
 Earlier: Updated 2026-11-05 (P2 defects, D041/D042; D043; D044: batch paused). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 

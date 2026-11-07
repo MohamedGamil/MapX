@@ -67,3 +67,4 @@ site/node_modules/
 site/docs/
 site/.vitepress/cache/
 site/.vitepress/dist/
+site/.build.lock/

@@ -367,7 +367,7 @@ The dashboard's graph views and Architecture screen stay fast on large codebases
 A landing page, a documentation section built from docs/, and an About the author page, built by one command and deployed by a GitHub Actions workflow to GitHub Pages; every figure on the site is read from the code, and the site is checked for dead links, accessibility and size.
 
 - **M7-01** Site scaffold, brand theme and one-command build (site/ workspace) — DONE, P1, 8h; depends on nothing.
-- **M7-02** Documentation section built from docs/ with sidebar, search and link rewriting — BACKLOG, P1, 8h; depends on M7-01.
+- **M7-02** Documentation section built from docs/ with sidebar, search and link rewriting — DONE, P1, 8h; depends on M7-01.
 - **M7-03** Landing page: hero, capabilities, install, integrations — BACKLOG, P1, 8h; depends on M7-01.
 - **M7-04** About the author page (Mohamed Gamil) — CANCELLED, P1, 3h; depends on M7-01.
 - **M7-05** GitHub Pages deploy workflow and CI build check — BACKLOG, P1, 4h; depends on M7-01.

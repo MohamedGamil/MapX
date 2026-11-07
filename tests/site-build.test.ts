@@ -8,6 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
+import { buildSite } from './helpers/site-build';
 import { normaliseBase } from '../site/.vitepress/base';
 import { GUIDES } from '../scripts/site/sync-docs';
 
@@ -35,14 +36,6 @@ function walk(dir: string): string[] {
   return out;
 }
 
-function build(base: string | undefined, out: string): void {
-  const env = { ...process.env, SITE_OUT: out } as NodeJS.ProcessEnv;
-  if (base === undefined) delete env.SITE_BASE;
-  else env.SITE_BASE = base;
-  const r = spawnSync('npm', ['run', 'site:build', '--silent'], { cwd: ROOT, env, encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`site:build exited ${r.status}\n${r.stdout}\n${r.stderr}`);
-}
-
 run('site build (M7-01)', () => {
   let tmp = '';
   let outDefault = '';
@@ -53,8 +46,8 @@ run('site build (M7-01)', () => {
     tmp = mkdtempSync(join(tmpdir(), 'mapx-site-'));
     outDefault = join(tmp, 'default');
     outCustom = join(tmp, 'custom');
-    build(undefined, outDefault);
-    build('/x/', outCustom);
+    buildSite(outDefault);
+    buildSite(outCustom, '/x/');
   }, 240_000);
 
   afterAll(() => {

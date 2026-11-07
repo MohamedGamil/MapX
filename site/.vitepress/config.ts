@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { defineConfig } from 'vitepress';
-import { normaliseBase, siteOrigin } from './base';
+import { githubSlug, normaliseBase, siteOrigin } from './base';
+import { docsSidebar } from './sidebar';
+
+const version = readFileSync(new URL('../../VERSION', import.meta.url), 'utf8').trim();
 
 const base = normaliseBase(process.env.SITE_BASE);
 const origin = siteOrigin(process.env.SITE_URL);
@@ -21,6 +25,7 @@ export default defineConfig({
   outDir,
   lastUpdated: false,
   markdown: {
+    anchor: { slugify: githubSlug },
     config(md) {
       // The guides are documentation, not Vue templates: they quote Blade and Mustache `{{ … }}`, which
       // Vue would try to compile. Pages under docs/ render as plain HTML; the landing keeps Vue.
@@ -33,8 +38,6 @@ export default defineConfig({
       };
     },
   },
-  // M7-02 owns link rewriting (guides link to ../README.md and ../.mapx/*) and turns this off.
-  ignoreDeadLinks: true,
   // The theme's Inter font is never used (brand.css puts the system stack first), so its preload is a
   // wasted request and a console warning. The site makes no web-font requests.
   transformHtml: (code) => code.replace(/<link rel="preload" href="[^"]*\.woff2"[^>]*>/g, ''),
@@ -51,7 +54,14 @@ export default defineConfig({
     nav: [
       { text: 'Docs', link: '/docs/', activeMatch: '^/docs/' },
       { text: 'npm', link: 'https://www.npmjs.com/package/@mgamil/mapx' },
+      { text: `v${version}`, link: 'https://github.com/MohamedGamil/mapx/blob/main/CHANGELOG.md' },
     ],
+    sidebar: { '/docs/': docsSidebar() },
+    search: { provider: 'local' },
+    editLink: {
+      pattern: 'https://github.com/MohamedGamil/mapx/edit/main/:path',
+      text: 'Edit this page on GitHub',
+    },
     socialLinks: [{ icon: 'github', link: 'https://github.com/MohamedGamil/mapx' }],
     footer: {
       message:

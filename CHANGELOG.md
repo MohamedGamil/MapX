@@ -10,6 +10,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Added
 - A GitHub Pages site is being built in `site/` (VitePress): `npm run site:build` builds it from the guides in `docs/`, with the MapX brand, a configurable base path (`SITE_BASE`) and a footer crediting Mohamed Gamil with a link to gamil.io. It is not part of the npm package (M7-01).
+- The site's documentation section publishes the 11 guides with a sidebar, search, "edit this page" links and the version; links to repository files that are not published point to GitHub, and heading anchors match GitHub's (M7-02).
 
 ### Fixed
 - `docs/mcp-integration.md`: the startup-output example closed its code block early at a nested fence, so the rest of the page rendered wrongly (M7-01).

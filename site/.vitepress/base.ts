@@ -28,3 +28,12 @@ export function normaliseBase(raw: string | undefined): string {
 export function siteOrigin(raw: string | undefined): string {
   return (raw?.trim() || 'https://mohamedgamil.github.io').replace(/\/+$/, '');
 }
+
+/**
+ * A heading's anchor the way GitHub makes it: lower case, punctuation dropped, spaces to hyphens. The
+ * guides link to these anchors (tests/docs-surface.test.ts checks them in the repository), and
+ * VitePress's own slugs differ for headings with an apostrophe, a slash or a plus sign.
+ */
+export function githubSlug(heading: string): string {
+  return heading.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/ /g, '-');
+}
