@@ -48,8 +48,12 @@ export const GUIDES: readonly string[] = GUIDE_META.map((g) => g.name);
 /** The description of the generated docs index page. */
 export const DOCS_INDEX_DESCRIPTION = 'Guides for installing, configuring and using MapX: the CLI and MCP reference, architecture rules and integrations.';
 
-export const REPO_BLOB = 'https://github.com/MohamedGamil/mapx/blob/main/';
-export const REPO_TREE = 'https://github.com/MohamedGamil/mapx/tree/main/';
+/** The branch the live site is built from (pages.yml deploys it): links to the repository point at it. */
+export const REPO_BRANCH = 'develop';
+export const REPO_URL = 'https://github.com/MohamedGamil/mapx';
+export const REPO_BLOB = `${REPO_URL}/blob/${REPO_BRANCH}/`;
+export const REPO_TREE = `${REPO_URL}/tree/${REPO_BRANCH}/`;
+export const REPO_EDIT = `${REPO_URL}/edit/${REPO_BRANCH}/`;
 
 /** Folders of docs/ that guides reference. Only image files are copied from them, never Markdown. */
 export const ASSET_DIRS = ['images'] as const;

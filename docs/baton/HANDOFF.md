@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@16af6b5561965ffc36cbe26754d5221043e10a15 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@c353e0431905039c718f615246b27f68ba8e9a1b (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M7-07 — Landing media: dashboard screenshots generated from a fixture.
-Evidence: `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-07.md; `npx vitest run tests/site-landing.test.ts tests/site-seo.test.ts tests/site-links.test.ts` (exit 0) → docs/baton/reports/M7-07.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-07.md; `npm run check` (exit 0) → docs/baton/reports/M7-07.md.
+Last completed: M7-05-R1 — First Pages deployment: the environment refuses main, and the site base path has the wrong case.
+Evidence: `npx vitest run tests/site-workflow.test.ts tests/site-build.test.ts` (exit 0) → docs/baton/reports/M7-05-R1.md; `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-05-R1.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-05-R1.md; `npm run check` (exit 0) → docs/baton/reports/M7-05-R1.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

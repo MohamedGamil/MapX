@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
 import { buildSiteDefaultOutput } from './helpers/site-build';
+import { REPO_BLOB, REPO_BRANCH, REPO_EDIT } from '../scripts/site/sync-docs';
 
 const ROOT = resolve(__dirname, '..');
 const load = (file: string) => parse(readFileSync(join(ROOT, '.github', 'workflows', file), 'utf8')) as Workflow;
@@ -60,6 +61,13 @@ describe('pages.yml (M7-05)', () => {
     expect(pages.permissions).toEqual({ contents: 'read' });
     expect(pages.jobs.build!.permissions).toBeUndefined();
     expect(pages.jobs.deploy!.permissions).toEqual({ pages: 'write', 'id-token': 'write' });
+  });
+
+  it('points the site\'s links into the repository at the branch it deploys', () => {
+    const deployed = (pages.on.push as { branches: string[] }).branches[0];
+    expect(REPO_BRANCH).toBe(deployed);
+    expect(REPO_BLOB).toContain(`/blob/${deployed}/`);
+    expect(REPO_EDIT).toContain(`/edit/${deployed}/`);
   });
 
   it('deploys only from develop, even when a manual run starts on another branch', () => {

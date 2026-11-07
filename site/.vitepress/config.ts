@@ -3,6 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import { defineConfig } from 'vitepress';
 import { githubSlug, normaliseBase, siteOrigin } from './base';
 import { docsSidebar } from './sidebar';
+import { REPO_BLOB, REPO_EDIT } from '../../scripts/site/sync-docs';
 
 // The landing page reads site/.vitepress/facts.json, which `npm run site:sync` writes from the code.
 if (!existsSync(new URL('./facts.json', import.meta.url))) {
@@ -88,14 +89,14 @@ export default defineConfig({
     nav: [
       { text: 'Docs', link: '/docs/', activeMatch: '^/docs/' },
       { text: 'npm', link: 'https://www.npmjs.com/package/@mgamil/mapx' },
-      { text: `v${version}`, link: 'https://github.com/MohamedGamil/mapx/blob/main/CHANGELOG.md' },
+      { text: `v${version}`, link: `${REPO_BLOB}CHANGELOG.md` },
     ],
     // The home link's aria-label defaults to "go to home", which does not contain its visible text.
     notFound: { linkLabel: 'Take me home' },
     sidebar: { '/docs/': docsSidebar() },
     search: { provider: 'local' },
     editLink: {
-      pattern: 'https://github.com/MohamedGamil/mapx/edit/main/:path',
+      pattern: `${REPO_EDIT}:path`,
       text: 'Edit this page on GitHub',
     },
     socialLinks: [{ icon: 'github', link: 'https://github.com/MohamedGamil/mapx' }],

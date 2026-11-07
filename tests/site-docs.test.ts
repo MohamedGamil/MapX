@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { buildSite, builtFileFor } from './helpers/site-build';
 import { DEFAULT_BASE } from '../site/.vitepress/base';
-import { GUIDE_META, GUIDES, REPO_BLOB, rewriteLinks, syncDocs } from '../scripts/site/sync-docs';
+import { GUIDE_META, GUIDES, REPO_BLOB, REPO_EDIT, rewriteLinks, syncDocs } from '../scripts/site/sync-docs';
 
 const ROOT = resolve(__dirname, '..');
 const SITE = join(ROOT, 'site');
@@ -238,7 +238,7 @@ run('built documentation (M7-02)', () => {
       expect(page(p), p).toMatch(new RegExp(`<a [^>]*href="[^"]*CHANGELOG\\.md"[^>]*>(?:<!--\\[-->)?<span[^>]*>v${version.replace(/\./g, '\\.')}<`));
     }
     for (const g of GUIDES) {
-      expect(page(g), g).toContain(`href="https://github.com/MohamedGamil/mapx/edit/main/docs/${g}.md"`);
+      expect(page(g), g).toContain(`href="${REPO_EDIT}docs/${g}.md"`);
     }
     expect(page('index')).not.toContain('edit-link-button');
     expect(page('getting-started')).toContain('edit-link-button');

@@ -359,4 +359,5 @@ flowchart LR
 - M7-05 ← M7-01 (hard)
 - M7-06 ← M7-02 (hard), M7-03 (hard)
 - M7-07 ← M7-03 (hard)
-- M7-98 ← M7-05 (quality), M7-06 (quality)
+- M7-98 ← M7-05 (quality), M7-06 (quality), M7-05-R1 (quality)
+- M7-05-R1 ← M7-05 (hard)
