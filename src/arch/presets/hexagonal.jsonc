@@ -1,0 +1,20 @@
+// mapx:preset/hexagonal: ports and adapters.
+// AR-15. Adapters plug into the application's ports; the application drives the domain; the domain
+// depends on nothing (builtins aside).
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // The model and its rules.
+    { "name": "Domain", "selectors": [{ "path": "%root%{domain,model,core}/**" }] },
+    // Use cases and the ports (interfaces) adapters implement or call.
+    { "name": "Application", "selectors": [{ "path": "%root%{application,ports,port,usecases,use-cases}/**" }] },
+    // Driving and driven adapters: HTTP, CLI, persistence, messaging.
+    { "name": "Adapters", "selectors": [{ "path": "%root%{adapters,adapter,infrastructure,infra}/**" }] }
+  ],
+  "rules": {
+    "Adapters": ["Application", "Domain"],
+    "Application": ["Domain"],
+    "Domain": []
+  }
+}

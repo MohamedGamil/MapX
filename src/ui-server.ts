@@ -1,15 +1,22 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, existsSync, statSync, watchFile, unwatchFile } from 'node:fs';
+import { readFileSync, existsSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, watch, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGzip } from 'node:zlib';
-import { pipeline } from 'node:stream';
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import { Config } from './core/config.js';
+import { describeConfig } from './core/config-report.js';
 import { Store } from './core/store.js';
+import { applyCollapsedRepos, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
+import { indexableChanges } from './core/staleness.js';
 import { MapxGraph } from './core/graph.js';
-import { calculateMetrics, calculateGraphMetrics } from './core/metrics.js';
+import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
+import { currentSmells } from './core/architecture-analyzer.js';
+import { archApi } from './ui-arch.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus, getToolCallsLogPath } from './ui-events.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 
@@ -21,6 +28,44 @@ interface ServerOpts {
   host: string;
   token?: string;
   dir: string;
+  /** Build a stale dashboard bundle first when running from source (the CLI sets it; M4-05). */
+  devBuild?: boolean;
+}
+
+/**
+ * The dashboard bundle of a source checkout needs building: a file it is made of is missing, or a
+ * file under `src/ui/`, the build script or the lockfile (its dependencies) is newer (M4-05:
+ * installs no longer build it).
+ */
+export function uiBundleStale(root: string): boolean {
+  const outputs = ['main.js', 'index.html', 'layout-worker.js'].map((f) => join(root, 'dist/ui', f));
+  if (!outputs.every((f) => existsSync(f))) return true;
+  const built = Math.min(...outputs.map((f) => statSync(f).mtimeMs));
+  const newer = (path: string): boolean => {
+    if (!existsSync(path)) return false;
+    const stat = statSync(path);
+    if (!stat.isDirectory()) return stat.mtimeMs > built;
+    return readdirSync(path).some((name) => newer(join(path, name)));
+  };
+  return ['src/ui', 'scripts/build-ui.ts', 'package-lock.json'].some((p) => newer(join(root, p)));
+}
+
+/**
+ * Running from source (`tsx src/main.ts ui`): build the dashboard first when it is stale. A failed
+ * build is reported and the server starts anyway, so `serve --ui` keeps its MCP server.
+ */
+function ensureDevBundle(): void {
+  if (!__filename.endsWith('.ts')) return; // an installed package or a binary ships its bundle
+  if (process.env.MAPX_NO_UI === '1') return;
+  const root = resolve(__dirname, '..');
+  if (!uiBundleStale(root)) return;
+  console.error('Building the dashboard…');
+  try {
+    const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
+    execFileSync(process.execPath, [tsxCli, join(root, 'scripts/build-ui.ts')], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] });
+  } catch (err) {
+    console.error(`Dashboard build failed (${err instanceof Error ? err.message.split('\n')[0] : err}); run npm run build:ui.`);
+  }
 }
 
 function findUiDir(): string {
@@ -55,9 +100,94 @@ function findUiDir(): string {
   return join(__dirname, 'ui');
 }
 
+/**
+ * A client on this machine, judged by the socket's address (never by a forwarded header, which the
+ * client writes). The dashboard's own user is not rate-limited: reloading the page, or the browser
+ * tests, must not get 429s from /api/graph (M4-17).
+ */
+export function isLoopback(address: string | undefined): boolean {
+  if (!address) return false;
+  return address === '::1' || address.startsWith('127.') || address.startsWith('::ffff:127.');
+}
+
+/**
+ * The dashboard's own user: a loopback client whose request is not cross-site, i.e. it sends no
+ * Origin (curl, the CLI) or the dashboard's own origin. A web page in another tab also connects
+ * from loopback, but sends its own Origin, and stays rate-limited.
+ */
+export function isOwnLocalClient(req: IncomingMessage): boolean {
+  if (!isLoopback(req.socket.remoteAddress)) return false;
+  const origin = req.headers.origin;
+  return !origin || origin === `http://${req.headers.host}`;
+}
+
+/**
+ * The `repo` query parameter of the dashboard API (M4-21). Endpoints over the whole index (graph,
+ * symbols, routes) default to every repo; per-repo analyses (clusters, smells, profile, DSM,
+ * metrics) default to the primary repo. `all` asks for every repo where that is defined.
+ */
+export type RepoScope = { all: true; name?: undefined } | { all: false; name: string };
+
+export function repoScope(param: string | null, config: Pick<Config, 'repos' | 'repo'>, fallback: 'all' | 'primary'): RepoScope | { error: string; status: number } {
+  const value = param?.trim() ?? '';
+  if (!value) return fallback === 'all' ? { all: true } : { all: false, name: config.repo.name };
+  if (value === 'all') return { all: true };
+  if (!config.repos.some((r) => r.name === value)) return { error: `Unknown repo: ${value}`, status: 404 };
+  return { all: false, name: value };
+}
+
+/** Bodies smaller than this go out as they are: compressing them saves little. */
+const COMPRESS_MIN_BYTES = 1024;
+
+/**
+ * The encoding to send a body in: brotli when the client accepts it, else gzip, else none (M4-20).
+ * Only `br` and `gzip` tokens without `q=0` count.
+ */
+export function pickEncoding(acceptEncoding: string | string[] | undefined): 'br' | 'gzip' | null {
+  const header = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : acceptEncoding ?? '';
+  const parts = header.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean);
+  const name = (part: string) => part.split(';')[0]!.trim();
+  const refused = new Set(parts.filter((part) => /;\s*q=0(\.0+)?\s*$/.test(part)).map(name));
+  const accepted = new Set(parts.map(name).filter((n) => !refused.has(n)));
+  if (accepted.has('br')) return 'br';
+  if (accepted.has('gzip') || (accepted.has('*') && !refused.has('gzip'))) return 'gzip';
+  return null;
+}
+
+/** Compresses `body` for `encoding`; brotli at a fast level, since the dashboard compresses per request. */
+function encode(body: Buffer, encoding: 'br' | 'gzip'): Buffer {
+  return encoding === 'br'
+    ? brotliCompressSync(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: body.length } })
+    : gzipSync(body, { level: 6 });
+}
+
+/** Sends a body, compressed when the client accepts it and it is large enough. */
+function sendBody(req: IncomingMessage, res: ServerResponse, status: number, contentType: string, body: Buffer, extraHeaders: Record<string, string> = {}) {
+  const encoding = body.length >= COMPRESS_MIN_BYTES ? pickEncoding(req.headers['accept-encoding']) : null;
+  const headers: Record<string, string | number> = { 'Content-Type': contentType, Vary: 'Accept-Encoding', ...extraHeaders };
+  const payload = encoding ? encode(body, encoding) : body;
+  if (encoding) headers['Content-Encoding'] = encoding;
+  headers['Content-Length'] = payload.length;
+  res.writeHead(status, headers);
+  res.end(payload);
+}
+
+/** Static files compressed once per file version (path, size and mtime) and encoding. */
+const staticCache = new Map<string, Buffer>();
+
+/** `Config.load` plus the duplicate-entry collapse the CLI and MCP loaders apply (M0-10-R4). */
+async function loadConfig(dir: string, store: Store): Promise<Config> {
+  const config = await Config.load(dir);
+  for (const message of applyCollapsedRepos(config, store)) console.error(message);
+  return config;
+}
+
 export function startUiServer(opts: ServerOpts) {
   const { port, host, token, dir } = opts;
+  if (opts.devBuild) ensureDevBundle();
   const uiDir = findUiDir();
+  // Git, `npm link` and `file:` installs run only `prepare`, which no longer builds the dashboard (D020).
+  if (!existsSync(join(uiDir, 'main.js'))) console.error(`Dashboard bundle not found in ${uiDir}; run npm run build:ui in the MapX folder.`);
 
   // Simple in-memory rate-limiter: IP -> timestamp[]
   const rateLimitMap = new Map<string, number[]>();
@@ -121,15 +251,128 @@ export function startUiServer(opts: ServerOpts) {
 
     // Handle Rate Limiting for specific endpoints
     if (pathname === '/api/context' || pathname === '/api/graph' || pathname === '/api/graph/meta') {
-      if (isRateLimited(ip)) {
+      if (!isOwnLocalClient(req) && isRateLimited(ip)) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Rate limit exceeded: max 10 requests per minute' }));
         return;
       }
     }
 
+    const json = (status: number, body: unknown) => sendBody(req, res, status, 'application/json', Buffer.from(JSON.stringify(body)));
+    /** The request's repo scope, or null after answering an unknown repo or a refused `all`. */
+    const scopeOf = (config: Config, fallback: 'all' | 'primary', allowAll = true): RepoScope | null => {
+      const scope = repoScope(parsedUrl.searchParams.get('repo'), config, fallback);
+      if ('error' in scope) { json(scope.status, { error: scope.error }); return null; }
+      if (scope.all && !allowAll) { json(400, { error: 'This view is per repo: pass repo=<name>.' }); return null; }
+      return scope;
+    };
+
     try {
       // API endpoints
+      // The effective configuration, read-only (M4-22, D027): no method writes it.
+      if (pathname === '/api/config') {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD');
+          json(405, { error: 'The configuration is read-only here: edit .mapx/config.json, or use mapx workspaces and mapx lang.' });
+          return;
+        }
+        // Config.read: no default file created, no duplicate entry saved away, no store opened.
+        let config: Config | null;
+        try {
+          config = await Config.read(dir);
+        } catch (err) {
+          json(422, { error: `.mapx/config.json is not valid JSON: ${err instanceof Error ? err.message : err}` });
+          return;
+        }
+        if (!config) {
+          json(404, { error: 'MapX is not initialized here: no .mapx/config.json.' });
+          return;
+        }
+        json(200, describeConfig(dir, config));
+        return;
+      }
+
+      // Cross-repo HTTP (M4-23): every frontend call site (the records `mapx routes --clients --json`
+      // prints), with the repos of the caller and of the handler it reaches, grouped per repo pair,
+      // plus the unmatched calls per repo, the caller's line of code and the handler's line.
+      if (pathname === '/api/http') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'all');
+          if (!scope) return;
+          const repoOfFile = new Map(store.raw.prepare('SELECT path, repo FROM files').all().map((f: any) => [f.path as string, f.repo as string]));
+          // Files the index does not hold (an excluded caller): the repo whose folder contains them.
+          const byDepth = [...config.repos].sort((a, b) => b.path.length - a.path.length);
+          const repoOf = (file: string) => repoOfFile.get(file)
+            ?? byDepth.find((r) => r.path !== '.' && (file === r.path || file.startsWith(r.path.replace(/\/$/, '') + '/')))?.name
+            ?? config.repo.name;
+          const lineOf = (file: string, line: number): string | null => {
+            try {
+              const abs = resolve(dir, file);
+              if (!abs.startsWith(resolve(dir) + '/') || !repoOfFile.has(file)) return null; // indexed files only
+              return readFileSync(abs, 'utf8').split('\n')[line - 1]?.trim().slice(0, 240) ?? null;
+            } catch {
+              return null;
+            }
+          };
+          const handlerLine = store.raw.prepare('SELECT start_line FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line LIMIT 1');
+          const calls = (await loadClientCalls(dir)).map((call) => {
+            const callerRepo = repoOf(call.file);
+            const handlerRepo = call.route ? repoOf(call.route.handlerFile) : null;
+            const method = call.route?.handlerSymbol?.split(/@|::|\./).pop();
+            const handlerAt = call.route && method ? (handlerLine.get(call.route.handlerFile, method) as { start_line: number } | undefined)?.start_line ?? null : null;
+            return { ...call, callerRepo, handlerRepo, callerCode: lineOf(call.file, call.line), handlerLine: handlerAt };
+          }).filter((c) => scope.all || c.callerRepo === scope.name || c.handlerRepo === scope.name);
+          const pairs = new Map<string, { from: string; to: string; count: number; calls: typeof calls }>();
+          const unmatched = new Map<string, { repo: string; count: number; calls: typeof calls }>();
+          for (const c of calls) {
+            if (c.route) {
+              const key = `${c.callerRepo}\u0000${c.handlerRepo}`;
+              const pair = pairs.get(key) ?? { from: c.callerRepo, to: c.handlerRepo as string, count: 0, calls: [] };
+              pair.count++;
+              pair.calls.push(c);
+              pairs.set(key, pair);
+            } else {
+              const group = unmatched.get(c.callerRepo) ?? { repo: c.callerRepo, count: 0, calls: [] };
+              group.count++;
+              group.calls.push(c);
+              unmatched.set(c.callerRepo, group);
+            }
+          }
+          json(200, {
+            total: calls.length,
+            matched: calls.filter((c) => c.route).length,
+            pairs: [...pairs.values()].sort((a, b) => b.count - a.count || a.from.localeCompare(b.from) || a.to.localeCompare(b.to)),
+            unmatched: [...unmatched.values()].sort((a, b) => b.count - a.count || a.repo.localeCompare(b.repo)),
+          });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/repos') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const repos = summarizeRepos(dir, config.repos, config.repo.name, store).map((r) => {
+            const root = resolve(dir, r.path);
+            const isGit = isGitRepo(root);
+            const lastCommit = store.getMeta('last_scan_commit:' + r.name) || undefined;
+            let changes: number | null = null;
+            try {
+              changes = isGit ? indexableChanges(store, dir, root, getChangedFiles(root, lastCommit), r.name).length : null;
+            } catch { /* git unavailable: unknown */ }
+            return { ...r, git: { isGit, head: r.head, changesSinceScan: changes } };
+          });
+          json(200, { primary: config.repo.name, repos, crossRepo: crossRepoPairs(store) });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
       if (pathname === '/api/status') {
         const configPath = resolve(dir, '.mapx', 'config.json');
         if (!existsSync(configPath)) {
@@ -140,11 +383,11 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          const config = await loadConfig(dir, store);
           const fileCount = store.getFileCount();
           const symbolCount = store.getSymbolCount();
           const edgeCount = store.getEdgeCount();
           const lastScan = store.getMeta('last_scan_time') || 'never';
-          const config = await Config.load(dir);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -156,7 +399,7 @@ export function startUiServer(opts: ServerOpts) {
             languages: store.getLanguageBreakdown()
           }));
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -170,7 +413,7 @@ export function startUiServer(opts: ServerOpts) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ totalFiles, totalEdges, totalElements: totalFiles + totalEdges }));
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -179,35 +422,11 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          // --- Build MapxGraph and compute PageRank ---
-          const config = await Config.load(dir);
-          const graph = new MapxGraph(config.repo.name);
-
-          const files = store.getAllFiles();
-          const allSymbols = store.getAllSymbols();
-          const edges = store.getAllEdges();
-
-          for (const file of files) {
-            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
-          }
-          for (const sym of allSymbols) {
-            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-          }
-          for (const edge of edges) {
-            graph.addDependencyEdge({
-              sourceFile: edge.source_file as string,
-              targetFile: edge.target_file as string,
-              sourceSymbol: edge.source_symbol as string | null,
-              targetSymbol: edge.target_symbol as string | null,
-              edgeType: edge.edge_type as any,
-              repo: edge.repo as string,
-              weight: edge.weight as number,
-              verifiability: edge.verifiability as any,
-              targetRepo: edge.target_repo as string | null,
-            });
-          }
-
-          const pageRankScores = graph.computePageRank();
+          const scope = scopeOf(await loadConfig(dir, store), 'all');
+          if (!scope) return;
+          // --- Retrieve pre-computed PageRank scores directly from SQLite ---
+          const files = store.getAllFiles(scope.name);
+          const fileSet = new Set(files.map((f) => f.path as string));
 
           // --- Symbol counts per file via SQL aggregate ---
           const symbolCountRows = store.raw.prepare(
@@ -231,11 +450,27 @@ export function startUiServer(opts: ServerOpts) {
                 size: f.size_bytes,
                 lines: f.lines,
                 symbolCount: symbolCountMap.get(fPath) || 0,
-                pagerank: pageRankScores.get(fPath) || 0
+                pagerank: (f.pagerank as number) || 0,
+                role: f.role,
+                roleConfidence: f.role_confidence,
+                repo: f.repo,
               }
             });
           }
-          for (const e of edges) {
+
+          // --- Retrieve and format grouped file-to-file edges directly from SQLite ---
+          // Aggregating directly in SQLite avoids loading and looping over thousands of symbol-level edges in JS.
+          const groupedEdges = store.raw.prepare(`
+            SELECT source_file, target_file, MAX(weight) as weight, COUNT(*) as count, edge_type, verifiability,
+                   MAX(CASE WHEN target_repo IS NOT NULL AND target_repo != repo THEN 1 ELSE 0 END) AS cross_repo,
+                   MIN(repo) AS repo, MAX(target_repo) AS target_repo
+            FROM edges
+            GROUP BY source_file, target_file
+          `).all() as Array<{ source_file: string; target_file: string; weight: number; count: number; edge_type: string; verifiability: string; cross_repo: number; repo: string; target_repo: string | null }>;
+
+          for (const e of groupedEdges) {
+            // One repo's graph: its own files and the edges between them (M4-21).
+            if (!scope.all && (!fileSet.has(e.source_file) || !fileSet.has(e.target_file))) continue;
             elements.push({
               data: {
                 id: `edge-${e.source_file}-${e.target_file}`,
@@ -243,7 +478,10 @@ export function startUiServer(opts: ServerOpts) {
                 target: e.target_file,
                 type: e.edge_type,
                 verifiability: e.verifiability,
-                weight: e.weight
+                weight: e.weight,
+                count: e.count,
+                // Edges into another registered repo are drawn distinctly (M4-21).
+                ...(e.cross_repo ? { crossRepo: true, repo: e.repo, targetRepo: e.target_repo } : {}),
               }
             });
           }
@@ -264,32 +502,10 @@ export function startUiServer(opts: ServerOpts) {
             responseBody = elements;
           }
 
-          const payload = JSON.stringify(responseBody);
-
-          // --- Gzip compression for large responses ---
-          const acceptEncoding = req.headers['accept-encoding'] || '';
-          const clientAcceptsGzip = typeof acceptEncoding === 'string' && acceptEncoding.includes('gzip');
-
-          if (payload.length > 1 * 1024 * 1024 && clientAcceptsGzip) {
-            res.writeHead(200, {
-              'Content-Type': 'application/json',
-              'Content-Encoding': 'gzip',
-              'Transfer-Encoding': 'chunked'
-            });
-            const { Readable } = require('node:stream');
-            const source = Readable.from([payload]);
-            const gzip = createGzip();
-            pipeline(source, gzip, res, (err: any) => {
-              if (err && !res.destroyed) {
-                res.end();
-              }
-            });
-          } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(payload);
-          }
+          // Compressed when the client accepts it (M4-20): the 2,000-file graph is about 1 MB of JSON.
+          sendBody(req, res, 200, 'application/json', Buffer.from(JSON.stringify(responseBody)));
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -298,14 +514,92 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
-          const repo = config.repo.name;
-          const clusters = store.getClusters(repo);
-          const memberships = store.getClusterMemberships(repo);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ clusters, memberships }));
+          const scope = scopeOf(await loadConfig(dir, store), 'primary');
+          if (!scope) return;
+          // The dashboard reads filePath and clusterName: the rows' snake_case names never matched,
+          // so community and layer grouping fell back to directories (found in M4-21).
+          const memberships = store.getClusterMemberships(scope.name).map((m) => ({ ...m, filePath: m['file_path'], clusterName: m['cluster_name'] }));
+          json(200, { clusters: store.getClusters(scope.name), memberships });
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/profile') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const scope = scopeOf(await loadConfig(dir, store), 'primary', false);
+          if (!scope) return;
+          const profileStr = store.getMeta('codebase_profile:' + scope.name);
+          json(200, { repo: scope.name, profile: profileStr ? JSON.parse(profileStr) : null });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/smells') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'primary');
+          if (!scope) return;
+          // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16).
+          const smells = currentSmells(store, dir, scope.all ? config.repos.map((r) => r.name) : [scope.name], { primary: config.repo.name, repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])) });
+          json(200, { smells });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      // The architecture view (M5-15): the rules of .mapx/architecture.jsonc, read-only. Over the
+      // whole workspace, as `mapx check`; a repo narrows the lists (src/ui-arch.ts).
+      if (pathname.startsWith('/api/arch/')) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD');
+          json(405, { error: 'The architecture view is read-only: edit .mapx/architecture.jsonc, or propose one with mapx arch init.' });
+          return;
+        }
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'all');
+          if (!scope) return;
+          const answer = await archApi(pathname.slice('/api/arch/'.length), parsedUrl.searchParams, dir, config, store, scope.all ? null : scope.name);
+          json(answer.status, answer.body);
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/dsm') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const scope = scopeOf(await loadConfig(dir, store), 'primary', false);
+          if (!scope) return;
+          json(200, { repo: scope.name, ...calculateDSM(store, scope.name as string) });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/explain') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const file = parsedUrl.searchParams.get('file') || '';
+          const signals = store.getClassificationSignals(file);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ signals }));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -314,14 +608,18 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          const scope = scopeOf(await loadConfig(dir, store), 'all');
+          if (!scope) return;
           const term = parsedUrl.searchParams.get('q') || '';
-          const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
-          const results = store.searchSymbolsFiltered({ term, limit });
+          const limit = Math.min(Math.max(1, parseInt(parsedUrl.searchParams.get('limit') || '50', 10)), 200);
+          const offset = Math.max(0, parseInt(parsedUrl.searchParams.get('offset') || '0', 10));
+          const results = store.searchSymbolsFiltered({ term, limit, offset, repo: scope.name });
+          const total = store.countSymbolsFiltered({ term, repo: scope.name });
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(results));
+          res.end(JSON.stringify({ results, total, limit, offset }));
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -366,7 +664,7 @@ export function startUiServer(opts: ServerOpts) {
             sourceCode
           }));
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -375,63 +673,54 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
-          const graph = new MapxGraph(config.repo.name);
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'primary', false);
+          if (!scope) return;
+          const repoName = scope.name as string;
+          const repoConfig = config.repos.find((r) => r.name === repoName) ?? config.repo;
 
-          for (const file of store.getAllFiles()) {
-            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
-          }
-          for (const sym of store.getAllSymbols()) {
-            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-          }
-          for (const edge of store.getAllEdges()) {
-            graph.addDependencyEdge({
-              sourceFile: edge.source_file as string,
-              targetFile: edge.target_file as string,
-              sourceSymbol: edge.source_symbol as string | null,
-              targetSymbol: edge.target_symbol as string | null,
-              edgeType: edge.edge_type as any,
-              repo: edge.repo as string,
-              weight: edge.weight as number,
-              verifiability: edge.verifiability as any,
-              targetRepo: edge.target_repo as string | null,
-            });
-          }
+          const fileCount = store.getFileCount(repoName);
+          const symbolCount = store.getSymbolCount(repoName);
+          const edgeCount = store.getEdgeCount(repoName);
 
-          const fileCount = store.getFileCount();
-          const symbolCount = store.getSymbolCount();
-          const edgeCount = store.getEdgeCount();
-
-          const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
-          const graphMetrics = calculateGraphMetrics(store, config.repo.name);
-          const topFiles = store.getTopFilesByPageRank(graph, 10);
-          const topSymbols = store.getTopSymbolsByPageRank(graph, 10);
+          // D012 file rows, every file, with the PageRank the scan stored.
+          const storedRank = new Map(store.getAllFiles(repoName).map(f => [f.path as string, Number(f.pagerank ?? 0)]));
+          const fileMetrics = buildMetricsReport(store, storedRank, { dir, repo: repoName, top: 0 }).report.files;
+          const graphMetrics = calculateGraphMetrics(store, repoName);
+          const topFiles = store.raw.prepare('SELECT path, pagerank, language FROM files WHERE repo = ? ORDER BY pagerank DESC LIMIT 10').all(repoName);
+          const topSymbols = (store.raw.prepare(`
+            SELECT s.name, s.kind, s.file_path, s.start_line, s.scope,
+                   (f.pagerank * (1 + (CASE WHEN s.scope IS NOT NULL THEN 2 ELSE 1 END) * 0.1)) AS pagerank
+            FROM symbols s JOIN files f ON s.file_path = f.path
+            WHERE s.repo = ? ORDER BY pagerank DESC LIMIT 10
+          `).all(repoName) as any[]).map((r) => ({ name: r.name, kind: r.kind, filePath: r.file_path, startLine: r.start_line, pagerank: r.pagerank, scope: r.scope }));
 
           // Get extra metrics matching CLI status
-          const verifiedEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
-          const inferredEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred'").get() as any)?.cnt || 0;
-          const languages = store.getLanguageBreakdown();
+          const verifiedEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified' AND repo = ?").get(repoName) as any)?.cnt || 0;
+          const inferredEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred' AND repo = ?").get(repoName) as any)?.cnt || 0;
+          const languages = store.getLanguageBreakdown(repoName);
 
           const symbolKinds = store.raw.prepare(
-            'SELECT kind, COUNT(*) as cnt FROM symbols GROUP BY kind ORDER BY cnt DESC'
-          ).all() as Array<{ kind: string; cnt: number }>;
+            'SELECT kind, COUNT(*) as cnt FROM symbols WHERE repo = ? GROUP BY kind ORDER BY cnt DESC'
+          ).all(repoName) as Array<{ kind: string; cnt: number }>;
 
           const edgeTypes = store.raw.prepare(
-            'SELECT edge_type, COUNT(*) as cnt FROM edges GROUP BY edge_type ORDER BY cnt DESC'
-          ).all() as Array<{ edge_type: string; cnt: number }>;
+            'SELECT edge_type, COUNT(*) as cnt FROM edges WHERE repo = ? GROUP BY edge_type ORDER BY cnt DESC'
+          ).all(repoName) as Array<{ edge_type: string; cnt: number }>;
 
           let dbSize = 0;
           try {
             dbSize = statSync(dbPath).size;
           } catch {}
 
-          const repoRoot = resolve(dir, config.repo.path);
+          const repoRoot = resolve(dir, repoConfig.path);
           const isGit = isGitRepo(repoRoot);
-          const lastCommit = store.getMeta('last_scan_commit:' + config.repo.name) || store.getMeta('last_scan_commit');
-          const gitChanges = isGit ? getChangedFiles(repoRoot, lastCommit || undefined) : [];
+          const lastCommit = store.getMeta('last_scan_commit:' + repoName) || (repoName === config.repo.name ? store.getMeta('last_scan_commit') : null);
+          // As `mapx status` (M0-11-R3).
+          const gitChanges = isGit ? indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), repoName) : [];
 
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
+          json(200, {
+            repo: repoName,
             totalFiles: fileCount,
             totalSymbols: symbolCount,
             totalEdges: edgeCount,
@@ -452,9 +741,9 @@ export function startUiServer(opts: ServerOpts) {
             fileMetrics,
             topFiles,
             topSymbols
-          }));
+          });
         } finally {
-          store.close();
+          try { store.close(); } catch { /* ignore close errors */ }
         }
         return;
       }
@@ -479,15 +768,13 @@ export function startUiServer(opts: ServerOpts) {
 
             const dbPath = resolve(dir, '.mapx', 'mapx.db');
             store = new Store(dbPath);
-            const config = await Config.load(dir);
+            const config = await loadConfig(dir, store);
             const graph = new MapxGraph(config.repo.name);
 
             for (const file of store.getAllFiles()) {
               graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
             }
-            for (const sym of store.getAllSymbols()) {
-              graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-            }
+            // Symbols loading is skipped to optimize context build memory and time.
             for (const edge of store.getAllEdges()) {
               graph.addDependencyEdge({
                 sourceFile: edge.source_file as string,
@@ -507,11 +794,13 @@ export function startUiServer(opts: ServerOpts) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(context));
           } catch (err: any) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
+            if (!res.headersSent) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: err.message }));
+            }
           } finally {
             if (store) {
-              store.close();
+              try { store.close(); } catch { /* ignore close errors */ }
             }
           }
         });
@@ -519,33 +808,49 @@ export function startUiServer(opts: ServerOpts) {
       }
 
       if (pathname === '/api/routes') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        let config: Config;
+        try {
+          config = await loadConfig(dir, store);
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        const scope = scopeOf(config, 'all');
+        if (!scope) return;
         const routeRegistry = new RouteRegistry();
         await routeRegistry.load(dir);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          routes: routeRegistry.getRoutes(),
-          hooks: routeRegistry.getHooks()
-        }));
+        // Routes and hooks record the repo they were found in; older entries without one belong to the primary repo.
+        const inScope = (item: { metadata?: Record<string, unknown> }) => scope.all || ((item.metadata?.['repo'] as string | undefined) ?? config.repo.name) === scope.name;
+        json(200, {
+          routes: routeRegistry.getRoutes().filter(inScope),
+          hooks: routeRegistry.getHooks().filter(inScope),
+        });
         return;
       }
 
       if (pathname === '/api/tool-calls') {
         const mapxDir = resolve(dir, '.mapx');
         const logPath = getToolCallsLogPath(mapxDir);
+        const qp = new URL(req.url!, 'http://localhost').searchParams;
+        const limit = Math.min(Math.max(1, parseInt(qp.get('limit') ?? '50', 10)), 200);
+        const offset = Math.max(0, parseInt(qp.get('offset') ?? '0', 10));
         const events: any[] = [];
+        let total = 0;
         if (existsSync(logPath)) {
           try {
             const content = readFileSync(logPath, 'utf-8');
             const lines = content.split('\n').filter(Boolean);
-            // Return most recent 100 entries, newest first
-            const recent = lines.slice(-100).reverse();
-            for (const line of recent) {
+            total = lines.length;
+            // newest-first pagination: offset 0 = most recent entries
+            const end = Math.max(0, total - offset);
+            const start = Math.max(0, end - limit);
+            for (const line of lines.slice(start, end).reverse()) {
               try { events.push(JSON.parse(line)); } catch { /* skip malformed */ }
             }
           } catch { /* ignore read errors */ }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(events));
+        res.end(JSON.stringify({ events, total }));
         return;
       }
 
@@ -585,7 +890,6 @@ export function startUiServer(opts: ServerOpts) {
               return;
             }
             // Read only the new bytes
-            const { openSync, readSync, closeSync } = require('node:fs');
             const fd = openSync(logPath, 'r');
             const buf = Buffer.alloc(currentSize - lastSize);
             readSync(fd, buf, 0, buf.length, lastSize);
@@ -606,7 +910,6 @@ export function startUiServer(opts: ServerOpts) {
         let logWatcher: any = null;
         try {
           if (existsSync(logPath)) {
-            const { watch } = require('node:fs');
             logWatcher = watch(logPath, (eventType: string) => {
               if (eventType === 'change') {
                 pollLogFile();
@@ -652,15 +955,32 @@ export function startUiServer(opts: ServerOpts) {
           '.png': 'image/png'
         };
         const contentType = contentTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(readFileSync(safeAssetPath));
+        // Scripts, styles and markup go out compressed, cached per file version (M4-20).
+        const encoding = ['.js', '.css', '.html', '.svg', '.json'].includes(ext) ? pickEncoding(req.headers['accept-encoding']) : null;
+        if (!encoding) {
+          res.writeHead(200, { 'Content-Type': contentType, Vary: 'Accept-Encoding' });
+          res.end(readFileSync(safeAssetPath));
+        } else {
+          const stat = statSync(safeAssetPath);
+          const key = `${safeAssetPath}:${stat.size}:${stat.mtimeMs}:${encoding}`;
+          let body = staticCache.get(key);
+          if (!body) {
+            body = encode(readFileSync(safeAssetPath), encoding);
+            if (staticCache.size >= 64) staticCache.clear(); // rebuilt bundles leave old versions behind
+            staticCache.set(key, body);
+          }
+          res.writeHead(200, { 'Content-Type': contentType, 'Content-Encoding': encoding, 'Content-Length': body.length, Vary: 'Accept-Encoding' });
+          res.end(body);
+        }
       } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
       }
     } catch (err: any) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
     }
   });
 

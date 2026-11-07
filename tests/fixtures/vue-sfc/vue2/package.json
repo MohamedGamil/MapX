@@ -1,0 +1,10 @@
+{
+  "name": "vue2-helpdesk",
+  "private": true,
+  "dependencies": {
+    "pinia": "^2.1.7",
+    "vue": "^2.7.16",
+    "vue-router": "^3.6.5",
+    "vuex": "^3.6.2"
+  }
+}

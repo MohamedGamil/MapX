@@ -1,0 +1,20 @@
+// M5-16 fixture (synthetic): rule-derived smells (AR-18). Each smell has a positive and a negative
+// case here; tests/arch-smells.test.ts names them.
+{
+  "layers": [
+    { "name": "Controller", "selectors": [{ "path": "src/controller/**" }] },
+    { "name": "Service", "selectors": [{ "path": "src/service/**" }] },
+    { "name": "Repository", "selectors": [{ "path": "src/repository/**" }] },
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Shared", "selectors": [{ "path": "src/shared/**" }] },
+    { "name": "Util", "selectors": [{ "path": "src/util/**" }] }
+  ],
+  "rules": {
+    "Controller": ["+Service", "Util"],
+    "Service": ["+Repository", "Shared"],
+    "Repository": ["Domain"],
+    "Domain": ["Shared"],
+    "Shared": [],
+    "Util": []
+  }
+}

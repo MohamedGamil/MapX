@@ -222,14 +222,10 @@ describe('checkTryCatch (impact-analyzer)', () => {
 
       expect(result.affected).toHaveLength(3);
       
-      // caller1: depth 1, non-structural (call) -> HIGH risk.
-      // But it will call readFileSync and checkTryCatch.
-      // Our mocked readFileSync returns: "try {\n  call();\n} catch (e) {}"
-      // callLine is 2. callerStartLine is 1 (from getSymbolByName).
-      // So checkTryCatch(..., 2, 1, false) is true!
-      // Thus, risk is overridden to LOW!
+      // caller1: depth 1, non-structural (call) -> HIGH risk. Its body is inside a try block,
+      // which no longer downgrades the risk (D010, M0-11-R1).
       const c1 = result.affected.find(x => x.symbol === 'caller1');
-      expect(c1?.risk).toBe('LOW');
+      expect(c1?.risk).toBe('HIGH');
 
       // caller_test: in a test file, risk is LOW.
       const ct = result.affected.find(x => x.symbol === 'caller_test');
@@ -239,13 +235,14 @@ describe('checkTryCatch (impact-analyzer)', () => {
       const c2 = result.affected.find(x => x.symbol === 'caller2');
       expect(c2?.risk).toBe('LOW');
 
-      expect(result.summary.high).toBe(0);
-      expect(result.recommendation).toBe('Low blast radius — proceed with caution');
+      expect(result.summary.high).toBe(1);
+      expect(result.recommendation).toBe('Treat as BREAKING CHANGE — update all HIGH-risk callers');
     });
 
     it('returns default safe recommendation when no callers exist', () => {
       const mockStore = {
-        getCallersOfSymbol: () => []
+        getCallersOfSymbol: () => [],
+        getSymbolByName: () => null,
       } as unknown as Store;
       const analyzer = new ImpactAnalyzer(mockStore);
       const result = analyzer.analyze('safe_symbol', 3, '/dir');

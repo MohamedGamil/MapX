@@ -1,0 +1,4 @@
+# Synthetic fixture for M5-17-R1 (mapx arch init --preset rails). Not a real application.
+source "https://rubygems.org"
+
+gem "rails", "~> 7.1"

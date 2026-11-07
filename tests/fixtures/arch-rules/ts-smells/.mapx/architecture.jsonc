@@ -1,0 +1,17 @@
+// M5-16-R1 fixture (smells only, not in expected-findings.json): a strict Controller -> Service -> Repository chain
+// (layer-skip), a package confined to Repository (vendor-leak), a deprecated helper (deprecated-usage) and code in no
+// layer that nothing uses (orphan-element). Labelled in ../../expected-smells.json.
+{
+  "layers": [
+    { "name": "Controller", "selectors": [{ "path": "src/controller/**" }] },
+    { "name": "Service", "selectors": [{ "path": "src/service/**" }] },
+    { "name": "Repository", "selectors": [{ "path": "src/repository/**" }, { "package": "pg" }], "private": [{ "package": "pg" }] },
+    { "name": "Shared", "selectors": [{ "path": "src/shared/**" }] }
+  ],
+  "rules": {
+    "Controller": ["+Service"],
+    "Service": ["+Repository", "Shared"],
+    "Repository": [],
+    "Shared": []
+  }
+}

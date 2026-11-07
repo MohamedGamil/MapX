@@ -1,0 +1,13 @@
+{
+  "graph500": {
+    "baselineMs": 720,
+    "allowance": 0.2,
+    "source": "M4-16 audit (docs/research/dashboard-ux-audit.md): default graph ready on the generated 500-file fixture took 563-720 ms over three runs; the slowest is the baseline."
+  },
+  "fullGraph2000": {
+    "baselineMs": 7132,
+    "target": 0.7,
+    "maxLongTaskMs": 800,
+    "source": "M4-20: the M4-16 dashboard (fa31104) measured with its own audit on this machine on 2026-11-02: Full Codebase on the generated 2,000-file fixture settled in 7,059, 7,132 and 8,414 ms (median 7,132 ms), in one main-thread task of about 6 s. M4-16 itself recorded 9,768-10,636 ms; the fresh median is the stricter baseline. Target: at most 70% of it, and no main-thread task over 800 ms."
+  }
+}

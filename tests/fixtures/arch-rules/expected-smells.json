@@ -1,0 +1,1092 @@
+{
+ "version": 2,
+ "description": "Labelled smells of the arch-rules apps (M5-16-R1), apart from expected-findings.json. `complete[app]` lists the smell kinds whose labels are complete for the app: every rule-derived smell of that kind is a row, or the app has none. Only those kinds are scored. The ambient apps (M5-24-R1) were added after the labels and have no complete kind yet (M5-16-R4). `apps` lists apps used only for smells (they are not in expected-findings.json). dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance need per-edge counts and metric values and are not labelled. Rows were derived from the fixture sources, the configurations and the labels of expected-findings.json and expected-externals.json, never from the tool output; `evidence` cites the source or configuration line that makes each row true.",
+ "apps": {
+  "ts-smells": {
+   "language": "typescript",
+   "repos": null
+  }
+ },
+ "complete": {
+  "php": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "ts": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "python": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "go": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "php-broken-cycle": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "workspace": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "ts-vendor": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "python-vendor": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "php-vendor": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "go-vendor": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "python-poetry": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "python-pip": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "python-poetry-legacy": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "ts-smells": [
+   "layer-violation",
+   "vendor-leak",
+   "layer-cycle",
+   "layer-skip",
+   "deprecated-usage",
+   "undeclared-dependency",
+   "dev-dependency-in-prod",
+   "baseline-debt",
+   "architecture-config",
+   "orphan-element"
+  ],
+  "go-ambient": [],
+  "php-ambient": [],
+  "python-ambient": [],
+  "ts-ambient": []
+ },
+ "rows": [
+  {
+   "id": "go-violation-application/cancel_order.go-domain/audit_trail.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "application/cancel_order.go",
+    "domain/audit_trail.go"
+   ],
+   "evidence": "go/application/cancel_order.go:12 `domain.AuditTrail{}.Run()` depends on AuditTrail (domain/audit_trail.go); go/.mapx/architecture.jsonc:70 the rules of Application: `\"Application\": [`; AuditTrail is @internal to Domain (label go-20)"
+  },
+  {
+   "id": "go-violation-application/place_order.go-domain/ledger_helper.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "application/place_order.go",
+    "domain/ledger_helper.go"
+   ],
+   "evidence": "go/application/place_order.go:14 `domain.LedgerHelper{}.Run()` depends on LedgerHelper (domain/ledger_helper.go); go/.mapx/architecture.jsonc:70 the rules of Application: `\"Application\": [`; Application → Domain is allowed, but LedgerHelper is @internal to Domain (label go-19)"
+  },
+  {
+   "id": "go-violation-controller/order_controller.go-application/appinternal/pricing_rules.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "controller/order_controller.go",
+    "application/appinternal/pricing_rules.go"
+   ],
+   "evidence": "go/controller/order_controller.go:15 `appinternal.PricingRules{}.Run()` depends on PricingRules (application/appinternal/pricing_rules.go); go/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Application is allowed, but Application/Internal is private to Application (label go-16)"
+  },
+  {
+   "id": "go-violation-controller/order_controller.go-domain/order.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "controller/order_controller.go",
+    "domain/order.go"
+   ],
+   "evidence": "go/controller/order_controller.go:14 `domain.Order{}.Run()` depends on Order (domain/order.go); go/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Domain: Controller may use Application only, and not transitively (label go-05)"
+  },
+  {
+   "id": "go-violation-controller/report_controller.go-application/appinternal/tax_rules.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "controller/report_controller.go",
+    "application/appinternal/tax_rules.go"
+   ],
+   "evidence": "go/controller/report_controller.go:15 `appinternal.TaxRules{}.Run()` depends on TaxRules (application/appinternal/tax_rules.go); go/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; private to Application (label go-17)"
+  },
+  {
+   "id": "go-violation-controller/report_controller.go-infrastructure/sql_order_repository.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "controller/report_controller.go",
+    "infrastructure/sql_order_repository.go"
+   ],
+   "evidence": "go/controller/report_controller.go:14 `infrastructure.SqlOrderRepository{}.Run()` depends on SqlOrderRepository (infrastructure/sql_order_repository.go); go/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Infrastructure (label go-06)"
+  },
+  {
+   "id": "go-violation-domain/order.go-infrastructure/sql_order_repository.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "domain/order.go",
+    "infrastructure/sql_order_repository.go"
+   ],
+   "evidence": "go/domain/order.go:11 `infrastructure.SqlOrderRepository{}.Run()` depends on SqlOrderRepository (infrastructure/sql_order_repository.go); go/.mapx/architecture.jsonc:73 the rules of Domain: `\"Domain\": [`; Domain → Infrastructure (label go-07)"
+  },
+  {
+   "id": "go-violation-shared/result.go-domain/money.go",
+   "app": "go",
+   "type": "layer-violation",
+   "files": [
+    "shared/result.go",
+    "domain/money.go"
+   ],
+   "evidence": "go/shared/result.go:10 `domain.Money{}.Run()` depends on Money (domain/money.go); go/.mapx/architecture.jsonc:80 the rules of Shared: `\"Shared\": []`; Shared → Domain: Shared may use nothing (label go-08)"
+  },
+  {
+   "id": "go-cycle",
+   "app": "go",
+   "type": "layer-cycle",
+   "layers": [
+    "Domain",
+    "Shared",
+    "Infrastructure"
+   ],
+   "evidence": "Domain -> Infrastructure: go/domain/order.go:5 `\"example.com/shop/infrastructure\"`. Infrastructure -> Domain: go/infrastructure/sql_order_repository.go:4 `\"example.com/shop/domain\"`. Shared -> Domain: go/shared/result.go:4 `\"example.com/shop/domain\"`. Domain -> Shared: go/domain/money.go:4 `\"example.com/shop/shared\"`. One strongly connected component of three layers"
+  },
+  {
+   "id": "go-undeclared-infrastructure/http_gateway_test.go-gopkg.in/yaml.v3",
+   "app": "go",
+   "type": "undeclared-dependency",
+   "files": [
+    "infrastructure/http_gateway_test.go"
+   ],
+   "contains": " uses gopkg.in/yaml.v3 (",
+   "evidence": "go/infrastructure/http_gateway_test.go:10 `\"gopkg.in/yaml.v3\"` imports gopkg.in/yaml.v3; gopkg.in/yaml.v3 appears only as go/go.mod:15 `gopkg.in/yaml.v3 v3.0.1 // indirect`, go/go.sum:18 `gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "go-undeclared-infrastructure/system_probe.go-golang.org/x/sys",
+   "app": "go",
+   "type": "undeclared-dependency",
+   "files": [
+    "infrastructure/system_probe.go"
+   ],
+   "contains": " uses golang.org/x/sys (",
+   "evidence": "go/infrastructure/system_probe.go:12 `\"golang.org/x/sys/unix\"` imports golang.org/x/sys; golang.org/x/sys appears only as go/go.mod:14 `golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect`, go/go.sum:14 `golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 h1:0A+M6Uqn+Eje4kH`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "go-vendor-violation-domain/order_test.go-github.com/stretchr/testify",
+   "app": "go-vendor",
+   "type": "layer-violation",
+   "files": [
+    "domain/order_test.go"
+   ],
+   "contains": "must not depend on github.com/stretchr/testify (",
+   "evidence": "go-vendor/domain/order_test.go:6 `\"github.com/stretchr/testify/assert\"` uses github.com/stretchr/testify; go-vendor/.mapx/architecture.jsonc:31 `\"overlay\": true,` puts it in a layer or overlay the source layer may not use (disallowed-layer, label go-vendor-02)"
+  },
+  {
+   "id": "go-vendor-violation-domain/order.go-github.com/jmoiron/sqlx",
+   "app": "go-vendor",
+   "type": "layer-violation",
+   "files": [
+    "domain/order.go"
+   ],
+   "contains": "must not depend on github.com/jmoiron/sqlx (",
+   "evidence": "go-vendor/domain/order.go:3 `import \"github.com/jmoiron/sqlx\"` uses github.com/jmoiron/sqlx; go-vendor/.mapx/architecture.jsonc:25 `\"package\": \"github.com/jmoiron/sqlx\"` puts it in a layer or overlay the source layer may not use (disallowed-layer, label go-vendor-01)"
+  },
+  {
+   "id": "php-violation-app/Application/CancelOrder.php-app/Domain/AuditTrail.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Application/CancelOrder.php",
+    "app/Domain/AuditTrail.php"
+   ],
+   "evidence": "php/app/Application/CancelOrder.php:6 `use App\\Domain\\AuditTrail;` depends on AuditTrail (app/Domain/AuditTrail.php); php/.mapx/architecture.jsonc:70 the rules of Application: `\"Application\": [`; AuditTrail is @internal to Domain (label php-20)"
+  },
+  {
+   "id": "php-violation-app/Application/PlaceOrder.php-app/Domain/LedgerHelper.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Application/PlaceOrder.php",
+    "app/Domain/LedgerHelper.php"
+   ],
+   "evidence": "php/app/Application/PlaceOrder.php:7 `use App\\Domain\\LedgerHelper;` depends on LedgerHelper (app/Domain/LedgerHelper.php); php/.mapx/architecture.jsonc:70 the rules of Application: `\"Application\": [`; Application → Domain is allowed, but LedgerHelper is @internal to Domain (label php-19)"
+  },
+  {
+   "id": "php-violation-app/Controller/OrderController.php-app/Application/Internal/PricingRules.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Controller/OrderController.php",
+    "app/Application/Internal/PricingRules.php"
+   ],
+   "evidence": "php/app/Controller/OrderController.php:7 `use App\\Application\\Internal\\PricingRules;` depends on PricingRules (app/Application/Internal/PricingRules.php); php/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Application is allowed, but Application/Internal is private to Application (label php-16)"
+  },
+  {
+   "id": "php-violation-app/Controller/OrderController.php-app/Domain/Order.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Controller/OrderController.php",
+    "app/Domain/Order.php"
+   ],
+   "evidence": "php/app/Controller/OrderController.php:6 `use App\\Domain\\Order;` depends on Order (app/Domain/Order.php); php/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Domain: Controller may use Application only, and not transitively (label php-05)"
+  },
+  {
+   "id": "php-violation-app/Controller/ReportController.php-app/Application/Internal/TaxRules.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Controller/ReportController.php",
+    "app/Application/Internal/TaxRules.php"
+   ],
+   "evidence": "php/app/Controller/ReportController.php:7 `use App\\Application\\Internal\\TaxRules;` depends on TaxRules (app/Application/Internal/TaxRules.php); php/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; private to Application (label php-17)"
+  },
+  {
+   "id": "php-violation-app/Controller/ReportController.php-app/Infrastructure/SqlOrderRepository.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Controller/ReportController.php",
+    "app/Infrastructure/SqlOrderRepository.php"
+   ],
+   "evidence": "php/app/Controller/ReportController.php:6 `use App\\Infrastructure\\SqlOrderRepository;` depends on SqlOrderRepository (app/Infrastructure/SqlOrderRepository.php); php/.mapx/architecture.jsonc:67 the rules of Controller: `\"Controller\": [`; Controller → Infrastructure (label php-06)"
+  },
+  {
+   "id": "php-violation-app/Shared/Result.php-app/Domain/Money.php",
+   "app": "php",
+   "type": "layer-violation",
+   "files": [
+    "app/Shared/Result.php",
+    "app/Domain/Money.php"
+   ],
+   "evidence": "php/app/Shared/Result.php:5 `use App\\Domain\\Money;` depends on Money (app/Domain/Money.php); php/.mapx/architecture.jsonc:80 the rules of Shared: `\"Shared\": []`; Shared → Domain: Shared may use nothing (label php-08)"
+  },
+  {
+   "id": "php-cycle",
+   "app": "php",
+   "type": "layer-cycle",
+   "layers": [
+    "Domain",
+    "Shared"
+   ],
+   "evidence": "Domain -> Shared: php/app/Domain/Money.php:5 `use App\\Shared\\Text;`. Shared -> Domain: php/app/Shared/Result.php:5 `use App\\Domain\\Money;` (a violation, still a dependency). Domain -> Infrastructure (php/app/Domain/Order.php:5 `use App\\Infrastructure\\SqlOrderRepository;`) is skipped by php/.mapx/architecture.baseline.json:11 `\"skip_violations\": {`, so the baselined edge is outside the observed graph and Infrastructure is not in the cycle"
+  },
+  {
+   "id": "php-undeclared-app/Infrastructure/HttpGateway.php-doctrine/instantiator",
+   "app": "php",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses doctrine/instantiator (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:29 `new \\Doctrine\\Instantiator\\Instantiator();` imports doctrine/instantiator; doctrine/instantiator appears only as php/composer.lock:106 `\"name\": \"doctrine/instantiator\",`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "php-undeclared-app/Infrastructure/HttpGateway.php-guzzlehttp/psr7",
+   "app": "php",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses guzzlehttp/psr7 (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:25 `\\GuzzleHttp\\Psr7\\Utils::streamFor('run');` imports guzzlehttp/psr7; guzzlehttp/psr7 appears only as php/composer.lock:27 `\"require\": { \"guzzlehttp/psr7\": \"^2.6\" },`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "php-undeclared-app/Infrastructure/HttpGateway.php-myclabs/deep-copy",
+   "app": "php",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses myclabs/deep-copy (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:28 `\\DeepCopy\\deep_copy($logger);` imports myclabs/deep-copy; myclabs/deep-copy appears only as php/composer.lock:122 `\"name\": \"myclabs/deep-copy\",`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "php-undeclared-app/Infrastructure/HttpGateway.php-nesbot/carbon",
+   "app": "php",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses nesbot/carbon (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:18 `\\Carbon\\Carbon::now();` imports nesbot/carbon; nesbot/carbon appears only as php/composer.lock:72 `\"require\": { \"nesbot/carbon\": \"^2.72\", \"illuminate/collections\": \"^11.`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "php-undeclared-app/Infrastructure/HttpGateway.php-psr/log",
+   "app": "php",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses psr/log (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:9 `use Psr\\Log\\LoggerInterface;` imports psr/log; psr/log appears only as php/composer.lock:63 `\"require\": { \"illuminate/support\": \"^11.0\", \"psr/log\": \"^3.0\" },`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "php-devprod-app/Infrastructure/HttpGateway.php-doctrine/instantiator",
+   "app": "php",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses doctrine/instantiator (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:29 `new \\Doctrine\\Instantiator\\Instantiator();` imports doctrine/instantiator, which only the development dependencies hold (php/composer.lock:106 `\"name\": \"doctrine/instantiator\",`); the file is production code, not a test"
+  },
+  {
+   "id": "php-devprod-app/Infrastructure/HttpGateway.php-fakerphp/faker",
+   "app": "php",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses fakerphp/faker (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:26 `\\Faker\\Factory::create();` imports fakerphp/faker, which only the development dependencies hold (php/composer.json:12 `\"fakerphp/faker\": \"^1.23\",`, php/composer.lock:114 `\"name\": \"fakerphp/faker\",`); the file is production code, not a test"
+  },
+  {
+   "id": "php-devprod-app/Infrastructure/HttpGateway.php-myclabs/deep-copy",
+   "app": "php",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses myclabs/deep-copy (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:28 `\\DeepCopy\\deep_copy($logger);` imports myclabs/deep-copy, which only the development dependencies hold (php/composer.lock:122 `\"name\": \"myclabs/deep-copy\",`); the file is production code, not a test"
+  },
+  {
+   "id": "php-devprod-app/Infrastructure/HttpGateway.php-phpunit/phpunit",
+   "app": "php",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/Infrastructure/HttpGateway.php"
+   ],
+   "contains": " uses phpunit/phpunit (",
+   "evidence": "php/app/Infrastructure/HttpGateway.php:27 `\\PHPUnit\\Framework\\Assert::assertTrue(true);` imports phpunit/phpunit, which only the development dependencies hold (php/composer.json:13 `\"phpunit/phpunit\": \"^10.5\"`, php/composer.lock:131 `\"name\": \"phpunit/phpunit\",`); the file is production code, not a test"
+  },
+  {
+   "id": "php-baseline-debt",
+   "app": "php",
+   "type": "baseline-debt",
+   "layers": [
+    "Domain"
+   ],
+   "contains": "3 baselined violations",
+   "evidence": "php/.mapx/architecture.baseline.json:11 `\"skip_violations\": {` lists App\\Domain\\Order -> App\\Infrastructure\\SqlOrderRepository, any rule and edge type. Order.php has php/app/Domain/Order.php:5 `use App\\Infrastructure\\SqlOrderRepository;` (import), php/app/Domain/Order.php:12 `(new SqlOrderRepository())->run();` (instantiation) and php/app/Domain/Order.php:12 `(new SqlOrderRepository())->run();` (call): three edge types, three skipped findings, all from the Domain layer"
+  },
+  {
+   "id": "php-stale-baseline",
+   "app": "php",
+   "type": "architecture-config",
+   "files": [
+    ".mapx/architecture.baseline.json"
+   ],
+   "contains": "Stale baseline entry",
+   "evidence": "php/.mapx/architecture.baseline.json:6 `\"source\": \"App\\\\Domain\\\\Money\",` names Money -> SqlOrderRepository, but php/app/Domain/Money.php:7 `class Money` has no reference to SqlOrderRepository (the file's only edges are to Shared), so the entry matches nothing: stale, mapx check exits 3"
+  },
+  {
+   "id": "php-broken-cycle-config",
+   "app": "php-broken-cycle",
+   "type": "architecture-config",
+   "files": [],
+   "contains": "\"+\" allowances form a cycle",
+   "evidence": "php-broken-cycle/.mapx/architecture.jsonc:71 `\"+Domain\"` (Application) and php-broken-cycle/.mapx/architecture.jsonc:74 `\"+Application\",` (Domain) make the + allowances a cycle, so the configuration cannot be evaluated"
+  },
+  {
+   "id": "php-vendor-violation-app/Domain/Order.php-doctrine/dbal",
+   "app": "php-vendor",
+   "type": "layer-violation",
+   "files": [
+    "app/Domain/Order.php"
+   ],
+   "contains": "must not depend on doctrine/dbal (",
+   "evidence": "php-vendor/app/Domain/Order.php:4 `use Doctrine\\DBAL\\Connection;` uses doctrine/dbal; php-vendor/.mapx/architecture.jsonc:31 `\"overlay\": true,` puts it in a layer or overlay the source layer may not use (disallowed-layer, label php-vendor-01)"
+  },
+  {
+   "id": "php-vendor-violation-app/Domain/Order.php-fakerphp/faker",
+   "app": "php-vendor",
+   "type": "layer-violation",
+   "files": [
+    "app/Domain/Order.php"
+   ],
+   "contains": "must not depend on fakerphp/faker (",
+   "evidence": "php-vendor/app/Domain/Order.php:10 `\\Faker\\Factory::create();` uses fakerphp/faker; php-vendor/.mapx/architecture.jsonc:31 `\"overlay\": true,` puts it in a layer or overlay the source layer may not use (disallowed-layer, label php-vendor-02)"
+  },
+  {
+   "id": "php-vendor-devprod-app/Domain/Order.php-fakerphp/faker",
+   "app": "php-vendor",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/Domain/Order.php"
+   ],
+   "contains": " uses fakerphp/faker (",
+   "evidence": "php-vendor/app/Domain/Order.php:10 `\\Faker\\Factory::create();` imports fakerphp/faker, which only the development dependencies hold (php-vendor/composer.json:9 `\"fakerphp/faker\": \"^1.23\"`, php-vendor/composer.lock:33 `\"name\": \"fakerphp/faker\",`); the file is production code, not a test"
+  },
+  {
+   "id": "python-violation-app/application/cancel_order.py-app/domain/audit_trail.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/application/cancel_order.py",
+    "app/domain/audit_trail.py"
+   ],
+   "evidence": "python/app/application/cancel_order.py:2 `from app.domain.audit_trail import AuditTrail` depends on AuditTrail (app/domain/audit_trail.py); python/.mapx/architecture.jsonc:66 the rules of Application: `\"Application\": [`; AuditTrail is @internal to Domain (label python-20)"
+  },
+  {
+   "id": "python-violation-app/application/place_order.py-app/domain/ledger_helper.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/application/place_order.py",
+    "app/domain/ledger_helper.py"
+   ],
+   "evidence": "python/app/application/place_order.py:3 `from app.domain.ledger_helper import LedgerHelper` depends on LedgerHelper (app/domain/ledger_helper.py); python/.mapx/architecture.jsonc:66 the rules of Application: `\"Application\": [`; Application → Domain is allowed, but LedgerHelper is @internal to Domain (label python-19)"
+  },
+  {
+   "id": "python-violation-app/controller/order_controller.py-app/application/internal/pricing_rules.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/controller/order_controller.py",
+    "app/application/internal/pricing_rules.py"
+   ],
+   "evidence": "python/app/controller/order_controller.py:4 `from app.application.internal.pricing_rules import PricingRules` depends on PricingRules (app/application/internal/pricing_rules.py); python/.mapx/architecture.jsonc:63 the rules of Controller: `\"Controller\": [`; Controller → Application is allowed, but Application/Internal is private to Application (label python-16)"
+  },
+  {
+   "id": "python-violation-app/controller/order_controller.py-app/domain/order.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/controller/order_controller.py",
+    "app/domain/order.py"
+   ],
+   "evidence": "python/app/controller/order_controller.py:3 `from app.domain.order import Order` depends on Order (app/domain/order.py); python/.mapx/architecture.jsonc:63 the rules of Controller: `\"Controller\": [`; Controller → Domain: Controller may use Application only, and not transitively (label python-05)"
+  },
+  {
+   "id": "python-violation-app/controller/report_controller.py-app/application/internal/tax_rules.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/controller/report_controller.py",
+    "app/application/internal/tax_rules.py"
+   ],
+   "evidence": "python/app/controller/report_controller.py:4 `from app.application.internal.tax_rules import TaxRules` depends on TaxRules (app/application/internal/tax_rules.py); python/.mapx/architecture.jsonc:63 the rules of Controller: `\"Controller\": [`; private to Application (label python-17)"
+  },
+  {
+   "id": "python-violation-app/controller/report_controller.py-app/infrastructure/sql_order_repository.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/controller/report_controller.py",
+    "app/infrastructure/sql_order_repository.py"
+   ],
+   "evidence": "python/app/controller/report_controller.py:3 `from app.infrastructure.sql_order_repository import SqlOrderRepository` depends on SqlOrderRepository (app/infrastructure/sql_order_repository.py); python/.mapx/architecture.jsonc:63 the rules of Controller: `\"Controller\": [`; Controller → Infrastructure (label python-06)"
+  },
+  {
+   "id": "python-violation-app/domain/order.py-app/infrastructure/sql_order_repository.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/domain/order.py",
+    "app/infrastructure/sql_order_repository.py"
+   ],
+   "evidence": "python/app/domain/order.py:1 `from app.infrastructure.sql_order_repository import SqlOrderRepository` depends on SqlOrderRepository (app/infrastructure/sql_order_repository.py); python/.mapx/architecture.jsonc:69 the rules of Domain: `\"Domain\": [`; Domain → Infrastructure (label python-07)"
+  },
+  {
+   "id": "python-violation-app/shared/result.py-app/domain/money.py",
+   "app": "python",
+   "type": "layer-violation",
+   "files": [
+    "app/shared/result.py",
+    "app/domain/money.py"
+   ],
+   "evidence": "python/app/shared/result.py:1 `from app.domain.money import Money` depends on Money (app/domain/money.py); python/.mapx/architecture.jsonc:76 the rules of Shared: `\"Shared\": []`; Shared → Domain: Shared may use nothing (label python-08)"
+  },
+  {
+   "id": "python-cycle",
+   "app": "python",
+   "type": "layer-cycle",
+   "layers": [
+    "Domain",
+    "Shared",
+    "Infrastructure"
+   ],
+   "evidence": "Domain -> Infrastructure: python/app/domain/order.py:1 `from app.infrastructure.sql_order_repository import SqlOrderRepository`. Infrastructure -> Domain: python/app/infrastructure/sql_order_repository.py:1 `from app.domain.order import Order`. Shared -> Domain: python/app/shared/result.py:1 `from app.domain.money import Money`. Domain -> Shared: python/app/domain/money.py:1 `from app.shared.text import Text`. One strongly connected component of three layers"
+  },
+  {
+   "id": "python-undeclared-app/infrastructure/http_gateway.py-jinja2",
+   "app": "python",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses jinja2 (",
+   "evidence": "python/app/infrastructure/http_gateway.py:27 `import jinja2` imports jinja2; jinja2 appears only as python/uv.lock:77 `{ name = \"jinja2\" },`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-undeclared-app/infrastructure/http_gateway.py-markupsafe",
+   "app": "python",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses markupsafe (",
+   "evidence": "python/app/infrastructure/http_gateway.py:28 `from markupsafe import Markup` imports markupsafe; markupsafe appears only as python/uv.lock:106 `{ name = \"markupsafe\" },`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-undeclared-app/infrastructure/http_gateway.py-pluggy",
+   "app": "python",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python/app/infrastructure/http_gateway.py:32 `from pluggy import HookspecMarker` imports pluggy; pluggy appears only as python/uv.lock:125 `name = \"pluggy\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-undeclared-app/infrastructure/http_gateway.py-pysocks",
+   "app": "python",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses pysocks (",
+   "evidence": "python/app/infrastructure/http_gateway.py:30 `import socks` imports pysocks; pysocks appears only as python/uv.lock:130 `name = \"pysocks\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-undeclared-app/infrastructure/http_gateway.py-urllib3",
+   "app": "python",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses urllib3 (",
+   "evidence": "python/app/infrastructure/http_gateway.py:29 `import urllib3` imports urllib3; urllib3 appears only as python/uv.lock:158 `{ name = \"urllib3\" },`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-devprod-app/infrastructure/http_gateway.py-pluggy",
+   "app": "python",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python/app/infrastructure/http_gateway.py:32 `from pluggy import HookspecMarker` imports pluggy, which only the development dependencies hold (python/uv.lock:125 `name = \"pluggy\"`); the file is production code, not a test"
+  },
+  {
+   "id": "python-devprod-app/infrastructure/http_gateway.py-pytest",
+   "app": "python",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/http_gateway.py"
+   ],
+   "contains": " uses pytest (",
+   "evidence": "python/app/infrastructure/http_gateway.py:31 `import pytest` imports pytest, which only the development dependencies hold (python/uv.lock:25 `{ name = \"pytest\" },`); the file is production code, not a test"
+  },
+  {
+   "id": "python-pip-undeclared-app/infrastructure/gateway.py-pillow",
+   "app": "python-pip",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pillow (",
+   "evidence": "python-pip/app/infrastructure/gateway.py:6 `from PIL import Image` imports pillow; pillow is in no manifest and no lock file of the app (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-pip-devprod-app/infrastructure/gateway.py-pytest",
+   "app": "python-pip",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pytest (",
+   "evidence": "python-pip/app/infrastructure/gateway.py:5 `import pytest` imports pytest, which only the development dependencies hold (python-pip/requirements-dev.txt:2 `pytest>=8.0`); the file is production code, not a test"
+  },
+  {
+   "id": "python-poetry-undeclared-app/infrastructure/gateway.py-pluggy",
+   "app": "python-poetry",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python-poetry/app/infrastructure/gateway.py:7 `from pluggy import HookspecMarker` imports pluggy; pluggy appears only as python-poetry/poetry.lock:5 `name = \"pluggy\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-poetry-undeclared-app/infrastructure/gateway.py-urllib3",
+   "app": "python-poetry",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses urllib3 (",
+   "evidence": "python-poetry/app/infrastructure/gateway.py:5 `import urllib3` imports urllib3; urllib3 appears only as python-poetry/poetry.lock:40 `urllib3 = \">=1.21.1,<3\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-poetry-devprod-app/infrastructure/gateway.py-pluggy",
+   "app": "python-poetry",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python-poetry/app/infrastructure/gateway.py:7 `from pluggy import HookspecMarker` imports pluggy, which only the development dependencies hold (python-poetry/poetry.lock:5 `name = \"pluggy\"`); the file is production code, not a test"
+  },
+  {
+   "id": "python-poetry-devprod-app/infrastructure/gateway.py-pytest",
+   "app": "python-poetry",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pytest (",
+   "evidence": "python-poetry/app/infrastructure/gateway.py:6 `import pytest` imports pytest, which only the development dependencies hold (python-poetry/pyproject.toml:13 `pytest = \"^8.0\"`, python-poetry/poetry.lock:13 `name = \"pytest\"`); the file is production code, not a test"
+  },
+  {
+   "id": "python-poetry-legacy-undeclared-app/infrastructure/gateway.py-pluggy",
+   "app": "python-poetry-legacy",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python-poetry-legacy/app/infrastructure/gateway.py:5 `from pluggy import HookspecMarker` imports pluggy; pluggy appears only as python-poetry-legacy/poetry.lock:5 `name = \"pluggy\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-poetry-legacy-undeclared-app/infrastructure/gateway.py-urllib3",
+   "app": "python-poetry-legacy",
+   "type": "undeclared-dependency",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses urllib3 (",
+   "evidence": "python-poetry-legacy/app/infrastructure/gateway.py:3 `import urllib3` imports urllib3; urllib3 appears only as python-poetry-legacy/poetry.lock:32 `urllib3 = \">=1.21.1,<3\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "python-poetry-legacy-devprod-app/infrastructure/gateway.py-pluggy",
+   "app": "python-poetry-legacy",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pluggy (",
+   "evidence": "python-poetry-legacy/app/infrastructure/gateway.py:5 `from pluggy import HookspecMarker` imports pluggy, which only the development dependencies hold (python-poetry-legacy/poetry.lock:5 `name = \"pluggy\"`); the file is production code, not a test"
+  },
+  {
+   "id": "python-poetry-legacy-devprod-app/infrastructure/gateway.py-pytest",
+   "app": "python-poetry-legacy",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/infrastructure/gateway.py"
+   ],
+   "contains": " uses pytest (",
+   "evidence": "python-poetry-legacy/app/infrastructure/gateway.py:4 `import pytest` imports pytest, which only the development dependencies hold (python-poetry-legacy/pyproject.toml:12 `pytest = \"^7.4\"`, python-poetry-legacy/poetry.lock:13 `name = \"pytest\"`); the file is production code, not a test"
+  },
+  {
+   "id": "python-vendor-violation-app/domain/order.py-pytest",
+   "app": "python-vendor",
+   "type": "layer-violation",
+   "files": [
+    "app/domain/order.py"
+   ],
+   "contains": "must not depend on pytest (",
+   "evidence": "python-vendor/app/domain/order.py:2 `import pytest` uses pytest; python-vendor/.mapx/architecture.jsonc:31 `\"overlay\": true,` puts it in a layer or overlay the source layer may not use (disallowed-layer, label python-vendor-02)"
+  },
+  {
+   "id": "python-vendor-violation-app/domain/order.py-sqlalchemy",
+   "app": "python-vendor",
+   "type": "layer-violation",
+   "files": [
+    "app/domain/order.py"
+   ],
+   "contains": "must not depend on sqlalchemy (",
+   "evidence": "python-vendor/app/domain/order.py:1 `import sqlalchemy` uses sqlalchemy; python-vendor/.mapx/architecture.jsonc:25 `\"package\": \"sqlalchemy\"` puts it in a layer or overlay the source layer may not use (disallowed-layer, label python-vendor-01)"
+  },
+  {
+   "id": "python-vendor-devprod-app/domain/order.py-pytest",
+   "app": "python-vendor",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "app/domain/order.py"
+   ],
+   "contains": " uses pytest (",
+   "evidence": "python-vendor/app/domain/order.py:2 `import pytest` imports pytest, which only the development dependencies hold (no manifest line); the file is production code, not a test"
+  },
+  {
+   "id": "ts-violation-src/application/CancelOrder.ts-src/domain/AuditTrail.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/application/CancelOrder.ts",
+    "src/domain/AuditTrail.ts"
+   ],
+   "evidence": "ts/src/application/CancelOrder.ts:2 `import { AuditTrail } from '../domain/AuditTrail';` depends on AuditTrail (src/domain/AuditTrail.ts); ts/.mapx/architecture.jsonc:84 the rules of Application: `\"Application\": [`; AuditTrail is @internal to Domain (label ts-20)"
+  },
+  {
+   "id": "ts-violation-src/application/PlaceOrder.ts-src/domain/LedgerHelper.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/application/PlaceOrder.ts",
+    "src/domain/LedgerHelper.ts"
+   ],
+   "evidence": "ts/src/application/PlaceOrder.ts:3 `import { LedgerHelper } from '../domain/LedgerHelper';` depends on LedgerHelper (src/domain/LedgerHelper.ts); ts/.mapx/architecture.jsonc:84 the rules of Application: `\"Application\": [`; Application → Domain is allowed, but LedgerHelper is @internal to Domain (label ts-19)"
+  },
+  {
+   "id": "ts-violation-src/controller/OrderController.ts-src/application/internal/PricingRules.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/controller/OrderController.ts",
+    "src/application/internal/PricingRules.ts"
+   ],
+   "evidence": "ts/src/controller/OrderController.ts:4 `import { PricingRules } from '../application/internal/PricingRules';` depends on PricingRules (src/application/internal/PricingRules.ts); ts/.mapx/architecture.jsonc:81 the rules of Controller: `\"Controller\": [`; Controller → Application is allowed, but Application/Internal is private to Application (label ts-16)"
+  },
+  {
+   "id": "ts-violation-src/controller/OrderController.ts-src/domain/Order.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/controller/OrderController.ts",
+    "src/domain/Order.ts"
+   ],
+   "evidence": "ts/src/controller/OrderController.ts:3 `import { Order } from '../domain/Order';` depends on Order (src/domain/Order.ts); ts/.mapx/architecture.jsonc:81 the rules of Controller: `\"Controller\": [`; Controller → Domain: Controller may use Application only, and not transitively (label ts-05)"
+  },
+  {
+   "id": "ts-violation-src/controller/ReportController.ts-src/application/internal/TaxRules.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/controller/ReportController.ts",
+    "src/application/internal/TaxRules.ts"
+   ],
+   "evidence": "ts/src/controller/ReportController.ts:4 `import { TaxRules } from '../application/internal/TaxRules';` depends on TaxRules (src/application/internal/TaxRules.ts); ts/.mapx/architecture.jsonc:81 the rules of Controller: `\"Controller\": [`; private to Application (label ts-17)"
+  },
+  {
+   "id": "ts-violation-src/controller/ReportController.ts-src/infrastructure/SqlOrderRepository.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/controller/ReportController.ts",
+    "src/infrastructure/SqlOrderRepository.ts"
+   ],
+   "evidence": "ts/src/controller/ReportController.ts:3 `import { SqlOrderRepository } from '../infrastructure/SqlOrderRepository';` depends on SqlOrderRepository (src/infrastructure/SqlOrderRepository.ts); ts/.mapx/architecture.jsonc:81 the rules of Controller: `\"Controller\": [`; Controller → Infrastructure (label ts-06)"
+  },
+  {
+   "id": "ts-violation-src/domain/Order.ts-src/infrastructure/SqlOrderRepository.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/domain/Order.ts",
+    "src/infrastructure/SqlOrderRepository.ts"
+   ],
+   "evidence": "ts/src/domain/Order.ts:1 `import { SqlOrderRepository } from '../infrastructure/SqlOrderRepository';` depends on SqlOrderRepository (src/infrastructure/SqlOrderRepository.ts); ts/.mapx/architecture.jsonc:87 the rules of Domain: `\"Domain\": [`; Domain → Infrastructure (label ts-07)"
+  },
+  {
+   "id": "ts-violation-src/shared/Result.ts-src/domain/Money.ts",
+   "app": "ts",
+   "type": "layer-violation",
+   "files": [
+    "src/shared/Result.ts",
+    "src/domain/Money.ts"
+   ],
+   "evidence": "ts/src/shared/Result.ts:1 `import { Money } from '../domain/Money';` depends on Money (src/domain/Money.ts); ts/.mapx/architecture.jsonc:94 the rules of Shared: `\"Shared\": []`; Shared → Domain: Shared may use nothing (label ts-08)"
+  },
+  {
+   "id": "ts-cycle",
+   "app": "ts",
+   "type": "layer-cycle",
+   "layers": [
+    "Domain",
+    "Shared",
+    "Infrastructure"
+   ],
+   "evidence": "Domain -> Shared: ts/src/domain/Money.ts:1 `import { Text } from '../shared/Text';` (Shared is in Domain's rules). Shared -> Domain: ts/src/shared/Result.ts:1 `import { Money } from '../domain/Money';` (a violation, still a dependency). Domain -> Infrastructure: ts/src/domain/Order.ts:1 `import { SqlOrderRepository } from '../infrastructure/SqlOrderRepository';` (a violation, not baselined in ts). Infrastructure -> Domain: ts/src/infrastructure/SqlOrderRepository.ts:1 `import { Order } from '../domain/Order';` (allowed). Four edges between three layers: one strongly connected component"
+  },
+  {
+   "id": "ts-undeclared-src/infrastructure/HttpGateway.ts-js-yaml",
+   "app": "ts",
+   "type": "undeclared-dependency",
+   "files": [
+    "src/infrastructure/HttpGateway.ts"
+   ],
+   "contains": " uses js-yaml (",
+   "evidence": "ts/src/infrastructure/HttpGateway.ts:8 `const yaml = require('js-yaml');` imports js-yaml; js-yaml appears only as ts/package-lock.json:27 `\"js-yaml\": \"^4.1.0\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "ts-undeclared-src/infrastructure/Tooling.ts-debug",
+   "app": "ts",
+   "type": "undeclared-dependency",
+   "files": [
+    "src/infrastructure/Tooling.ts"
+   ],
+   "contains": " uses debug (",
+   "evidence": "ts/src/infrastructure/Tooling.ts:5 `import debug from 'debug';` imports debug; debug appears only as ts/package-lock.json:33 `\"node_modules/debug\": {`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "ts-undeclared-src/infrastructure/Tooling.ts-left-pad",
+   "app": "ts",
+   "type": "undeclared-dependency",
+   "files": [
+    "src/infrastructure/Tooling.ts"
+   ],
+   "contains": " uses left-pad (",
+   "evidence": "ts/src/infrastructure/Tooling.ts:11 `import pad from 'left-pad';` imports left-pad; left-pad is in no manifest and no lock file of the app (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "ts-undeclared-src/infrastructure/Tooling.ts-semver",
+   "app": "ts",
+   "type": "undeclared-dependency",
+   "files": [
+    "src/infrastructure/Tooling.ts"
+   ],
+   "contains": " uses semver (",
+   "evidence": "ts/src/infrastructure/Tooling.ts:6 `import { satisfies } from 'semver';` imports semver; semver appears only as ts/package-lock.json:44 `\"semver\": \"^7.6.0\"`, never among the manifest's own dependencies (AR-18: not a direct dependency of the manifest, transitive only or missing)"
+  },
+  {
+   "id": "ts-devprod-src/infrastructure/HttpGateway.ts-reflect-metadata",
+   "app": "ts",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "src/infrastructure/HttpGateway.ts"
+   ],
+   "contains": " uses reflect-metadata (",
+   "evidence": "ts/src/infrastructure/HttpGateway.ts:5 `import 'reflect-metadata';` imports reflect-metadata, which only the development dependencies hold (ts/package.json:17 `\"reflect-metadata\": \"^0.2.0\"`, ts/package-lock.json:18 `\"reflect-metadata\": \"^0.2.0\"`); the file is production code, not a test"
+  },
+  {
+   "id": "ts-devprod-src/infrastructure/Tooling.ts-lodash",
+   "app": "ts",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "src/infrastructure/Tooling.ts"
+   ],
+   "contains": " uses lodash (",
+   "evidence": "ts/src/infrastructure/Tooling.ts:7 `import get from 'lodash/get';` imports lodash, which only the development dependencies hold (ts/package.json:15 `\"lodash\": \"^4.17.21\",`, ts/package-lock.json:16 `\"lodash\": \"^4.17.21\",`); the file is production code, not a test"
+  },
+  {
+   "id": "ts-devprod-src/infrastructure/Tooling.ts-semver",
+   "app": "ts",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "src/infrastructure/Tooling.ts"
+   ],
+   "contains": " uses semver (",
+   "evidence": "ts/src/infrastructure/Tooling.ts:6 `import { satisfies } from 'semver';` imports semver, which only the development dependencies hold (ts/package-lock.json:44 `\"semver\": \"^7.6.0\"`); the file is production code, not a test"
+  },
+  {
+   "id": "ts-smells-vendor-leak",
+   "app": "ts-smells",
+   "type": "vendor-leak",
+   "files": [
+    "src/controller/OrderController.ts"
+   ],
+   "contains": "pg",
+   "evidence": "ts-smells/.mapx/architecture.jsonc:8 `{ \"name\": \"Repository\", \"selectors\": [{ \"path\": \"src/repository/**\" }, { \"package\": \"pg\" }], \"private\": [{ \"package\": \"pg\" }] },` confines pg to Repository; ts-smells/src/controller/OrderController.ts:9 `private readonly pool = new Pool();` (imported at ts-smells/src/controller/OrderController.ts:3 `import { Pool } from 'pg';`) uses it from Controller"
+  },
+  {
+   "id": "ts-smells-skip",
+   "app": "ts-smells",
+   "type": "layer-skip",
+   "files": [
+    "src/controller/OrderController.ts",
+    "src/repository/SqlRepo.ts"
+   ],
+   "layers": [
+    "Controller",
+    "Service",
+    "Repository"
+   ],
+   "evidence": "The + chain is ts-smells/.mapx/architecture.jsonc:12 `\"Controller\": [\"+Service\"],` then ts-smells/.mapx/architecture.jsonc:13 `\"Service\": [\"+Repository\", \"Shared\"],`. ts-smells/src/controller/OrderController.ts:16 `return new SqlRepo().count();` goes from Controller to Repository, past Service, which has files"
+  },
+  {
+   "id": "ts-smells-deprecated",
+   "app": "ts-smells",
+   "type": "deprecated-usage",
+   "files": [
+    "src/service/OrderService.ts",
+    "src/shared/format.ts"
+   ],
+   "contains": "legacyLabel",
+   "evidence": "ts-smells/src/shared/format.ts:6 `/** @deprecated use label() */` tags legacyLabel; ts-smells/src/service/OrderService.ts:9 `return `${legacyLabel(id)} (${this.repo.count()})`;` calls it from outside"
+  },
+  {
+   "id": "ts-smells-orphan",
+   "app": "ts-smells",
+   "type": "orphan-element",
+   "files": [
+    "src/legacy/Dead.ts"
+   ],
+   "evidence": "ts-smells/src/legacy/Dead.ts:2 `export class Dead {` is in no layer (the layers cover controller, service, repository and shared only) and no file imports it (grep for 'Dead' in the app finds only its own declaration)"
+  },
+  {
+   "id": "ts-vendor-violation-src/domain/Order.ts-lodash",
+   "app": "ts-vendor",
+   "type": "layer-violation",
+   "files": [
+    "src/domain/Order.ts"
+   ],
+   "contains": "must not depend on lodash (",
+   "evidence": "ts-vendor/src/domain/Order.ts:2 `import debounce from 'lodash/debounce';` uses lodash; ts-vendor/.mapx/architecture.jsonc:31 `\"overlay\": true,` puts it in a layer or overlay the source layer may not use (disallowed-layer, label ts-vendor-02)"
+  },
+  {
+   "id": "ts-vendor-violation-src/domain/Order.ts-pg",
+   "app": "ts-vendor",
+   "type": "layer-violation",
+   "files": [
+    "src/domain/Order.ts"
+   ],
+   "contains": "must not depend on pg (",
+   "evidence": "ts-vendor/src/domain/Order.ts:1 `import { Client } from 'pg';` uses pg; ts-vendor/.mapx/architecture.jsonc:25 `\"package\": \"pg\"` puts it in a layer or overlay the source layer may not use (disallowed-layer, label ts-vendor-01)"
+  },
+  {
+   "id": "ts-vendor-devprod-src/domain/Order.ts-lodash",
+   "app": "ts-vendor",
+   "type": "dev-dependency-in-prod",
+   "files": [
+    "src/domain/Order.ts"
+   ],
+   "contains": " uses lodash (",
+   "evidence": "ts-vendor/src/domain/Order.ts:2 `import debounce from 'lodash/debounce';` imports lodash, which only the development dependencies hold (ts-vendor/package.json:9 `\"lodash\": \"^4.17.21\"`); the file is production code, not a test"
+  },
+  {
+   "id": "workspace-violation-backend/routes/api.php-backend/app/Http/Controllers/Api/OrderController.php",
+   "app": "workspace",
+   "type": "layer-violation",
+   "files": [
+    "backend/routes/api.php",
+    "backend/app/Http/Controllers/Api/OrderController.php"
+   ],
+   "evidence": "workspace/backend/routes/api.php:3 `use App\\Http\\Controllers\\Api\\OrderController;` depends on OrderController (backend/app/Http/Controllers/Api/OrderController.php); workspace/.mapx/architecture.jsonc:68 the rules of Backend: `\"Backend\": []`; Backend → PublicApi: the route file imports the API controller, and Backend may use nothing. Added by M5-04 (2026-11-02): a true dependency the M5-01 labels missed; the configuration is unchanged (label workspace-03)"
+  },
+  {
+   "id": "workspace-violation-frontend/src/admin.ts-backend/app/Http/Controllers/Admin/UserController.php",
+   "app": "workspace",
+   "type": "layer-violation",
+   "files": [
+    "frontend/src/admin.ts",
+    "backend/app/Http/Controllers/Admin/UserController.php"
+   ],
+   "evidence": "workspace/frontend/src/admin.ts:2 `return fetch('/admin/users');` calls the admin endpoint that workspace/backend/routes/web.php:6 `Route::get('/admin/users', [UserController::class, 'index']);` routes to UserController::index (backend/app/Http/Controllers/Admin/UserController.php); workspace/.mapx/architecture.jsonc:55 the rules of Frontend: `\"Frontend\": [`; Frontend → Backend (an admin controller outside PublicApi) (label workspace-02)"
+  }
+ ]
+}

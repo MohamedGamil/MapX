@@ -1,0 +1,7 @@
+# Synthetic fixture for M5-17-R1. Not a real application.
+name: shop
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter

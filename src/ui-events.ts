@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface ToolCallEvent {
@@ -82,7 +82,6 @@ export class UiEventBus extends EventEmitter {
 
   private trimLogIfNeeded(logPath: string): void {
     try {
-      const { readFileSync, writeFileSync } = require('node:fs');
       const content = readFileSync(logPath, 'utf-8');
       const lines = content.split('\n').filter(Boolean);
       if (lines.length > MAX_LOG_LINES) {

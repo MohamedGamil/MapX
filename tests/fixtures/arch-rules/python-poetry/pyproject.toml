@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "arch-python-poetry"
+version = "0.0.0"
+description = "M5-22-R1: Poetry attribution, labelled in expected-externals.json"
+authors = ["Fixture <fixture@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.31"
+PyYAML = "^6.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

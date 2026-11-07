@@ -1,5 +1,16 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
+import { filterClustersToFiles } from './cluster-filter.js';
+
+/** Records a parse keeps for sync (M2-08-R8), large and of no use to a reader of the export. */
+const SYNC_RECORDS = ['jvmDecl', 'jvmImports', 'pyImports'];
+
+function publicMetadata(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  const metadata = JSON.parse(raw as string) as Record<string, unknown>;
+  for (const key of SYNC_RECORDS) delete metadata[key];
+  return metadata;
+}
 
 export class GraphExporter {
   private store: Store;
@@ -30,8 +41,12 @@ export class GraphExporter {
       graphData.edges = graphData.edges.filter((e: any) => allowed.has(e.source) && allowed.has(e.target));
     }
 
-    const clusters = this.store.getClusters(repo);
-    const memberships = this.store.getClusterMemberships(repo);
+    // A filtered export lists only memberships of exported files and the clusters still holding
+    // one (or ancestors of one), as the LLM and TOON exports do (M0-02-R2).
+    const allowedFiles = filesFilter ? new Set(filesFilter) : null;
+    let memberships = this.store.getClusterMemberships(repo);
+    const clusters = filterClustersToFiles(this.store.getClusters(repo), memberships, allowedFiles);
+    if (allowedFiles) memberships = memberships.filter(m => allowedFiles.has(m.file_path as string));
 
     return {
       version: '1.0.0',
@@ -50,7 +65,7 @@ export class GraphExporter {
         sizeBytes: f.size_bytes,
         lines: f.lines,
         lastScanned: f.last_scanned,
-        metadata: f.metadata ? JSON.parse(f.metadata as string) : undefined,
+        metadata: publicMetadata(f.metadata),
       })),
       symbols: symbols.map(s => ({
         name: s.name,

@@ -1,0 +1,111 @@
+// MapX's own architecture rules (M5-18), checked by `mapx check` in CI (.github/workflows/ci.yml, job
+// "Architecture"). Started from `mapx arch init`, whose role layers did not fit a CLI (53 violations on
+// 5 role layers), and rewritten by hand from the module map in
+// docs/research/deptrac/03-mapx-gap-and-integration.md §3.9, updated for src/ as it is now.
+// The user guide is docs/architecture-rules.md.
+//
+// Today's violations are frozen in .mapx/architecture.baseline.json (each import, and since M5-18-R1 each
+// call behind a baselined import, as its own entry): a new one fails CI, and a fixed one
+// leaves a stale entry that fails it too, so the baseline only shrinks (`mapx check --generate-baseline`
+// after a fix). Only this file and the baseline are tracked; the rest of .mapx/ stays ignored (D030).
+{
+  "$schema": "../schemas/architecture.schema.json",
+
+  // MapX's own source is under the rules. Tests and scripts are in scope only as targets: they are in the
+  // Outside overlay below, which no layer may depend on, and in no other layer, so their own dependencies
+  // are never judged (an edge from a file in no layer is skipped).
+  //
+  // Every dependency type is judged: imports, and the calls, instantiations, inheritance and type
+  // references behind them (M5-18-R1). M5-18 judged imports only, while names imported from node:path or
+  // the DOM resolved to project symbols; M2-08-R3, M2-12 and M2-13 removed those edges.
+  //
+  // tests/fixtures/** is in scope again (M5-18-R2): M5-18-R1 excluded it while a destructured local and a
+  // for-of loop variable linked homonyms in its sample projects (`Database`, `step`), which M2-25 and M2-26
+  // fixed in the resolver. An import of a fixture from src/ is judged through Outside.
+  "scope": { "include": ["src/**", "tests/**", "scripts/**"] },
+
+  // Only verified edges are judged: an inferred edge is matched by name alone. Under the default ("warn")
+  // its violations would be warnings, and generating the baseline would freeze them too, so a change in
+  // the resolver's guesses would fail CI with stale entries.
+  "policy": { "inferred": "ignore" },
+
+  "layers": [
+    // The process entry points and the surfaces they expose: the CLI (cli.ts, its logo in branding.ts),
+    // the MCP server (mcp.ts), the dashboard server (ui-server.ts, ui-events.ts, ui-arch.ts), the binary (main.ts)
+    // and the programmatic API (index.ts). They wire the layers below together.
+    { "name": "Entry", "selectors": [{ "path": "src/{main,index,cli,mcp,ui-server,ui-events,ui-arch,branding}.ts" }] },
+
+    // The dashboard's browser client, bundled on its own by scripts/build-ui.ts. It talks to ui-server
+    // over HTTP only, never by import.
+    { "name": "UI", "selectors": [{ "path": "src/ui/**" }] },
+
+    // `mapx agents`: AGENTS.md, CLAUDE.md and MCP config templates.
+    { "name": "Agents", "selectors": [{ "path": "src/agents/**" }] },
+
+    // Architecture rules (M5): configuration, selectors, evaluation, baselines, reporters, presets.
+    { "name": "Arch", "selectors": [{ "path": "src/arch/**" }] },
+
+    // LLM, JSON, DOT, SVG and TOON exporters over the store.
+    { "name": "Exporters", "selectors": [{ "path": "src/exporters/**" }] },
+
+    // The engine: scanner, store, resolution, roles, clusters, metrics, git tracking.
+    { "name": "Core", "selectors": [{ "path": "src/core/**" }] },
+
+    // Framework detectors, routes and HTTP client/route pairing.
+    { "name": "Frameworks", "selectors": [{ "path": "src/frameworks/**" }] },
+
+    // Tree-sitter parsers and the per-language extractors (src/parsers/languages/ is one layer with them:
+    // the two import each other by design).
+    { "name": "Parsers", "selectors": [{ "path": "src/parsers/**" }] },
+
+    // The language registry and grammar installer: which languages exist and where their grammars are.
+    { "name": "Languages", "selectors": [{ "path": "src/languages/**" }] },
+
+    // Leaf modules every layer may use: the shared types and the version.
+    { "name": "Shared", "selectors": [{ "path": "src/{types,version}.ts" }] },
+
+    // npm packages package.json lists for production (M5-24), which every layer may use. A dev-only package
+    // is in no layer, so production code that imports one fails the check as uncovered (--fail-on-uncovered).
+    // Node built-ins (node:fs …) are not reported (policy.uncovered.builtins is false).
+    { "name": "Packages", "selectors": [{ "package": "*", "dev": false }] },
+
+    // Tests, fixtures and maintenance scripts. An overlay is only ever a rule target: production code that
+    // imports one of them is a violation ("!Outside" below), and their own imports are not checked.
+    { "name": "Outside", "selectors": [{ "path": "{tests,scripts}/**" }], "overlay": true }
+  ],
+
+  "rules": {
+    // Every layer may use the shared types, the version and runtime packages, and none may import tests or scripts.
+    "*": ["Shared", "Packages", "!Outside"],
+
+    // Entry points use every layer but the browser client: Core, and through "+Core" everything Core may use.
+    "Entry": ["Agents", "Arch", "Exporters", "+Core"],
+
+    // Rules are evaluated over the index Core builds; the layer graph reporters reuse the SVG renderer.
+    "Arch": ["+Core", "Exporters"],
+
+    // Exporters read the store.
+    "Exporters": ["Core"],
+
+    // Core drives scanning (Frameworks, Parsers, Languages). It also reads the rules: with a configuration,
+    // core/architecture-analyzer.ts takes layer violations and rule smells from Arch, so the rules are the
+    // one source of layer violations (M5-16, research §3.3). That makes Core ↔ Arch a deliberate cycle, which
+    // `mapx arch --smells` reports as a layer-cycle.
+    "Core": ["Frameworks", "Parsers", "Languages", "Arch"],
+
+    // Detectors read source text and stored symbols; they depend on nothing above Shared.
+    "Frameworks": [],
+
+    // Parsers load grammars through the language registry.
+    "Parsers": ["Languages"],
+
+    // The registry is a leaf: language metadata and grammar files.
+    "Languages": [],
+
+    // Templates state the language count from the registry.
+    "Agents": ["Languages"],
+
+    // The browser client imports nothing from the server side.
+    "UI": []
+  }
+}

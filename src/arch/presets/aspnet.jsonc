@@ -1,0 +1,38 @@
+// mapx:preset/aspnet: an ASP.NET Core application (MVC, Web API, Razor Pages).
+// AR-15 (M5-17-R1). By ASP.NET's folder conventions, and by the framework base classes wherever a
+// class lives: ControllerBase and Controller (both named, since a base outside the workspace is a
+// leaf), PageModel, and Entity Framework's DbContext. Controllers and pages may inject the DbContext,
+// as the scaffolded ones do; models and DTOs depend on no layer above them.
+// No parameters: the folder names place every file, in whichever project it is.
+{
+  "layers": [
+    // MVC and API controllers.
+    { "name": "Controllers", "selectors": [
+      { "path": "**/Controllers/**" },
+      { "inherits": "ControllerBase" },
+      { "inherits": "Controller" },
+      { "decorator": "ApiController", "members": true }
+    ] },
+    // Razor Pages page models.
+    { "name": "Pages", "selectors": [{ "path": "**/Pages/**" }, { "inherits": "PageModel" }] },
+    // Middleware classes.
+    { "name": "Middleware", "selectors": [{ "path": "**/Middleware/**" }] },
+    // Application services.
+    { "name": "Services", "selectors": [{ "path": "**/Services/**" }] },
+    // Data access: DbContexts (any DbContext subclass), repositories and migrations.
+    { "name": "Data", "selectors": [{ "path": "**/{Data,Repositories,Migrations}/**" }, { "inherits": "DbContext" }] },
+    // Request and response types, and MVC view models.
+    { "name": "Dtos", "selectors": [{ "path": "**/{Dtos,DTOs,Contracts,ViewModels}/**" }] },
+    // Domain and persistence models.
+    { "name": "Models", "selectors": [{ "path": "**/{Models,Entities,Domain}/**" }] }
+  ],
+  "rules": {
+    "Controllers": ["Services", "Data", "Dtos", "Models"],
+    "Pages": ["Services", "Data", "Dtos", "Models"],
+    "Middleware": ["Services"],
+    "Services": ["Data", "Dtos", "Models"],
+    "Data": ["Models"],
+    "Dtos": ["Models"],
+    "Models": []
+  }
+}

@@ -10,7 +10,7 @@ describe('Store core class', () => {
   });
 
   it('initializes the database and runs migrations', () => {
-    expect(store.getMeta('schema_version')).toBe('6');
+    expect(store.getMeta('schema_version')).toBe('10');
   });
 
   it('performs meta operations correctly', () => {
@@ -210,6 +210,72 @@ describe('Store core class', () => {
     expect(store.getTopSymbolsByPageRank(graph, 1)).toEqual([{ name: 'A', pagerank: 0.9 }]);
   });
 
+  it('retrieves top files and symbols directly from SQLite database', () => {
+    const testStore = new Store(':memory:');
+    
+    // Insert a file
+    testStore.upsertFile({
+      path: 'db-file.ts',
+      repo: 'mapx',
+      language: 'typescript',
+      gitBlobHash: null,
+      contentHash: null,
+      lastScanned: new Date().toISOString(),
+      sizeBytes: 100,
+      lines: 10,
+    });
+    
+    // Set pagerank
+    testStore.updateFilePageRank('db-file.ts', 0.95);
+    
+    // Insert a symbol in that file
+    testStore.insertSymbol({
+      filePath: 'db-file.ts',
+      repo: 'mapx',
+      name: 'DbClass',
+      kind: 'class',
+      scope: null,
+      signature: '',
+      startLine: 1,
+      endLine: 5,
+      metadata: '{}'
+    });
+    
+    // Retrieve top file from DB (pass null as graph)
+    const topFiles = testStore.getTopFilesByPageRank(null, 1);
+    expect(topFiles).toHaveLength(1);
+    expect(topFiles[0].path).toBe('db-file.ts');
+    expect(topFiles[0].pagerank).toBe(0.95);
+    
+    // Retrieve top symbol from DB (pass null as graph)
+    const topSymbols = testStore.getTopSymbolsByPageRank(null, 1);
+    expect(topSymbols).toHaveLength(1);
+    expect(topSymbols[0].name).toBe('DbClass');
+    expect(topSymbols[0].filePath).toBe('db-file.ts');
+    // Formula check: since scope is null, pagerank = 0.95 * (1 + 1 * 0.1) = 0.95 * 1.1 = 1.045
+    expect(topSymbols[0].pagerank).toBeCloseTo(1.045, 4);
+
+    testStore.close();
+  });
+
+  it('caches prepared database statements', () => {
+    const testStore = new Store(':memory:');
+    
+    // Retrieve two statements with the same query
+    const query = 'SELECT 1';
+    const stmt1 = testStore.raw.prepare(query);
+    const stmt2 = testStore.raw.prepare(query);
+    
+    // They should be the exact same cached object (referential equality)
+    expect(stmt1).toBe(stmt2);
+    
+    // A different query should return a different statement
+    const stmt3 = testStore.raw.prepare('SELECT 2');
+    expect(stmt1).not.toBe(stmt3);
+    
+    testStore.close();
+  });
+
   it('supports close', () => {
     const tempStore = new Store(':memory:');
     expect(() => tempStore.close()).not.toThrow();
@@ -288,6 +354,8 @@ describe('Store core class', () => {
     backend.exec('DROP TABLE IF EXISTS edges');
     backend.exec('DROP TABLE IF EXISTS snapshots');
     backend.exec('DROP TABLE IF EXISTS meta');
+    backend.exec('DROP TABLE IF EXISTS clusters');
+    backend.exec('DROP TABLE IF EXISTS cluster_membership');
     backend.exec(`
       CREATE TABLE files (
         path TEXT PRIMARY KEY,
@@ -339,7 +407,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 1, apply migrations up to 6
     const storeV1 = new Store(testPath);
-    expect(storeV1.getMeta('schema_version')).toBe('6');
+    expect(storeV1.getMeta('schema_version')).toBe('10');
     // Verify content_hash and target_repo columns exist
     const filesInfo = storeV1.raw.prepare("PRAGMA table_info(files)").all();
     expect(filesInfo.some((c: any) => c.name === 'content_hash')).toBe(true);
@@ -363,6 +431,8 @@ describe('Store core class', () => {
     backend.exec('DROP TABLE IF EXISTS edges');
     backend.exec('DROP TABLE IF EXISTS snapshots');
     backend.exec('DROP TABLE IF EXISTS meta');
+    backend.exec('DROP TABLE IF EXISTS clusters');
+    backend.exec('DROP TABLE IF EXISTS cluster_membership');
     backend.exec(`
       CREATE TABLE files (
         path TEXT PRIMARY KEY,
@@ -415,7 +485,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 2, apply migrations up to 6
     const storeV2 = new Store(testPath);
-    expect(storeV2.getMeta('schema_version')).toBe('6');
+    expect(storeV2.getMeta('schema_version')).toBe('10');
     storeV2.close();
     fs.unlinkSync(testPath);
   });
@@ -752,6 +822,42 @@ describe('Store core class', () => {
       metadata: '{}'
     });
 
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'getEffectiveLimits',
+      kind: 'method',
+      scope: 'BillingService',
+      signature: '',
+      startLine: 12,
+      endLine: 15,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'deepMethod',
+      kind: 'method',
+      scope: 'NamespaceA::NamespaceB::ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'dotteddeepMethod',
+      kind: 'method',
+      scope: 'NamespaceA.NamespaceB.ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
     // 1. scope and name with repo
     const s1 = store.getSymbolByName('MyScope::MyClass', 'mapx');
     expect(s1).toBeDefined();
@@ -766,6 +872,36 @@ describe('Store core class', () => {
     const s3 = store.getSymbolByName('MyClass');
     expect(s3).toBeDefined();
     expect(s3?.name).toBe('MyClass');
+
+    // 4. Dot notation (C# / Java style)
+    const s4 = store.getSymbolByName('BillingService.getEffectiveLimits', 'mapx');
+    expect(s4).toBeDefined();
+    expect(s4?.name).toBe('getEffectiveLimits');
+
+    // 5. Double colon notation (PHP/C++ style)
+    const s5 = store.getSymbolByName('BillingService::getEffectiveLimits', 'mapx');
+    expect(s5).toBeDefined();
+    expect(s5?.name).toBe('getEffectiveLimits');
+
+    // 6. Multi-level namespace using double colons
+    const s6 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::deepMethod', 'mapx');
+    expect(s6).toBeDefined();
+    expect(s6?.name).toBe('deepMethod');
+
+    // 7. Multi-level namespace using dot notation
+    const s7 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC.deepMethod', 'mapx');
+    expect(s7).toBeDefined();
+    expect(s7?.name).toBe('deepMethod');
+
+    // 8. Mixed notation fallback (e.g. query with dots when DB has colons)
+    const s8 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC::deepMethod', 'mapx');
+    expect(s8).toBeDefined();
+    expect(s8?.name).toBe('deepMethod');
+
+    // 9. Mixed notation fallback (e.g. query with colons when DB has dots)
+    const s9 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::dotteddeepMethod', 'mapx');
+    expect(s9).toBeDefined();
+    expect(s9?.name).toBe('dotteddeepMethod');
   });
 
   it('performs getFilesFiltered with sort lines', () => {
@@ -848,5 +984,75 @@ describe('Store core class', () => {
     // Passing syntax error table name
     const exists = (store as any).columnExists('invalid; syntax', 'col');
     expect(exists).toBe(false);
+  });
+
+  describe('resetRepoForScan', () => {
+    const REPO = 'reset-test-repo';
+    const OTHER_REPO = 'other-repo';
+
+    function seedRepo(s: Store, repo: string, filePath: string) {
+      s.upsertFile({ path: filePath, repo, language: 'typescript', gitBlobHash: null, contentHash: 'h', lastScanned: '', sizeBytes: 10, lines: 1 });
+      s.insertSymbol({ filePath, repo, name: 'Sym', kind: 'class', scope: null, signature: '', startLine: 1, endLine: 2, metadata: '{}' });
+      s.insertEdge({ sourceFile: filePath, targetFile: 'other/dep.ts', sourceSymbol: 'Sym', targetSymbol: null, edgeType: 'import', repo, weight: 1 });
+      s.insertCluster({ repo, name: `cluster:${repo}`, label: 'Cluster', source: 'dir', parentName: null, depth: 1, fileCount: 1 });
+      s.insertClusterMembership({ filePath, clusterName: `cluster:${repo}`, repo, isPrimary: 1 });
+    }
+
+    it('clears files, symbols, edges, and clusters for the target repo', () => {
+      const s = new Store(':memory:');
+      seedRepo(s, REPO, 'src/reset.ts');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getAllFiles(REPO)).toHaveLength(0);
+      expect(s.getSymbolsForFile('src/reset.ts')).toHaveLength(0);
+      expect(s.getEdgesForFile('src/reset.ts')).toHaveLength(0);
+      expect(s.getClusters(REPO)).toHaveLength(0);
+      expect(s.getClusterMemberships(REPO)).toHaveLength(0);
+    });
+
+    it('does NOT touch files, symbols, or edges belonging to other repos', () => {
+      const s = new Store(':memory:');
+      seedRepo(s, REPO, 'src/reset.ts');
+      seedRepo(s, OTHER_REPO, 'src/other.ts');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getAllFiles(OTHER_REPO)).toHaveLength(1);
+      expect(s.getSymbolsForFile('src/other.ts')).toHaveLength(1);
+    });
+
+    it('preserves cross-repo incoming edges (target_repo of another repo)', () => {
+      const s = new Store(':memory:');
+      // Edge from OTHER_REPO pointing INTO REPO (as target_repo)
+      s.upsertFile({ path: 'src/other.ts', repo: OTHER_REPO, language: 'typescript', gitBlobHash: null, contentHash: null, lastScanned: '', sizeBytes: 10, lines: 1 });
+      s.insertEdge({ sourceFile: 'src/other.ts', targetFile: 'src/reset.ts', sourceSymbol: null, targetSymbol: null, edgeType: 'import', repo: OTHER_REPO, weight: 1, targetRepo: REPO });
+
+      s.resetRepoForScan(REPO);
+
+      // The incoming edge from OTHER_REPO should still exist
+      const edges = s.getReverseEdges('src/reset.ts');
+      expect(edges).toHaveLength(1);
+      expect(edges[0].repo).toBe(OTHER_REPO);
+    });
+
+    it('preserves last_scan_commit and last_scan_time meta keys', () => {
+      const s = new Store(':memory:');
+      s.setMeta(`last_scan_commit:${REPO}`, 'abc123');
+      s.setMeta(`last_scan_time:${REPO}`, '2026-01-01T00:00:00Z');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getMeta(`last_scan_commit:${REPO}`)).toBe('abc123');
+      expect(s.getMeta(`last_scan_time:${REPO}`)).toBe('2026-01-01T00:00:00Z');
+    });
+
+    it('is idempotent — calling twice on empty repo does not throw', () => {
+      const s = new Store(':memory:');
+      expect(() => {
+        s.resetRepoForScan(REPO);
+        s.resetRepoForScan(REPO);
+      }).not.toThrow();
+    });
   });
 });

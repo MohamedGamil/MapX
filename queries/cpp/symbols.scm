@@ -12,6 +12,10 @@
 (namespace_definition
   name: (namespace_identifier) @symbol.name) @symbol.kind_namespace
 
+; C++17 nested namespace definitions: `namespace acme::infra { … }` (M5-03-R1)
+(namespace_definition
+  name: (nested_namespace_specifier) @symbol.name) @symbol.kind_namespace
+
 ; Enum definitions
 (enum_specifier
   name: (type_identifier) @symbol.name) @symbol.kind_enum
@@ -22,22 +26,15 @@
     declarator: [
       (identifier) @symbol.name
       (field_identifier) @symbol.name
-      (qualified_identifier
-        name: (identifier) @symbol.name)
-      (qualified_identifier
-        name: (destructor_name (identifier) @symbol.name))
+      ; Out-of-line definitions qualified at any depth: `void Foo::run()`, `void ns::K::a()`,
+      ; `void a::b::c::D::g()`, `ns::K::~K()`. GenericWasmParser names the method by the innermost
+      ; name (`~K` for a destructor) and scopes it by the innermost qualifier (M0-17-R2, M0-17-R5).
+      (qualified_identifier) @symbol.name
     ])) @symbol.kind_function
 
-; Template class declarations
-(template_declaration
-  (class_specifier
-    name: (type_identifier) @symbol.name)) @symbol.kind_class
-
-; Template function declarations
-(template_declaration
-  (function_definition
-    declarator: (function_declarator
-      declarator: [(identifier) (field_identifier)] @symbol.name))) @symbol.kind_function
+; Template classes and functions need no pattern of their own: the class_specifier and
+; function_definition inside a template_declaration match the patterns above. A separate
+; template_declaration capture had no name and was stored under its whole source text (M0-17-R1).
 
 ; Type alias using declarations
 (alias_declaration

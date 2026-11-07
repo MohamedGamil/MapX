@@ -1,20 +1,29 @@
 import type { LanguageParser } from './parser-interface.js';
 import type { LanguageDefinition } from '../languages/registry.js';
-import { getLanguageForFile, getBuiltinLanguages } from '../languages/registry.js';
+import { getLanguageByName, getLanguageForFile, getBuiltinLanguages } from '../languages/registry.js';
 import { PhpParser } from './languages/php.js';
 import { JavaScriptParser } from './languages/javascript.js';
 import { TypeScriptParser } from './languages/typescript.js';
 import { VueParser } from './languages/vue.js';
+import { SvelteParser } from './languages/svelte.js';
 import { FallbackParser } from './fallback-parser.js';
+import { StaticFileParser } from './static-file-parser.js';
 import { GenericWasmParser } from './generic-wasm-parser.js';
 import { isLanguageInstalled } from '../languages/installer.js';
 
 const parserCache = new Map<string, LanguageParser>();
 const fallbackParser = new FallbackParser();
+const staticFileParser = new StaticFileParser();
 
-export function getParserForFile(filePath: string, userLanguages?: Record<string, LanguageDefinition>): LanguageParser {
-  const langDef = getLanguageForFile(filePath, userLanguages);
+/**
+ * Parser for a file. `languageName` overrides extension lookup — used for extensionless scripts
+ * whose language came from their shebang line.
+ */
+export function getParserForFile(filePath: string, userLanguages?: Record<string, LanguageDefinition>, languageName?: string): LanguageParser {
+  const langDef = (languageName ? getLanguageByName(languageName, userLanguages) : null) ?? getLanguageForFile(filePath, userLanguages);
   if (!langDef) return fallbackParser;
+
+  if (langDef.tier === 'static') return staticFileParser;
 
   if (langDef.tier === 'installable' && !isLanguageInstalled(langDef.name)) {
     return fallbackParser;
@@ -41,6 +50,8 @@ function createParser(langDef: LanguageDefinition): LanguageParser {
       return new TypeScriptParser(langDef);
     case 'vue':
       return new VueParser(langDef);
+    case 'svelte':
+      return new SvelteParser(langDef);
     case 'python':
     case 'go':
     case 'rust':

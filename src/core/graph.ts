@@ -1,5 +1,6 @@
 import Graph from 'graphology';
 import pagerank from 'graphology-metrics/centrality/pagerank.js';
+import picomatch from 'picomatch';
 import type { GraphEdge, SymbolKind } from '../types.js';
 
 export class MapxGraph {
@@ -42,11 +43,13 @@ export class MapxGraph {
   }
 
   addDependencyEdge(edge: GraphEdge): void {
+    if (edge.sourceFile === edge.targetFile) return;
     const sourceId = this.fileNodeId(edge.sourceFile);
     const targetId = this.fileNodeId(edge.targetFile);
 
     if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
-      const edgeKey = `${sourceId}->${targetId}:${edge.edgeType}:${edge.sourceSymbol || ''}`;
+      // HTTP calls to different actions of one controller stay distinct edges.
+      const edgeKey = `${sourceId}->${targetId}:${edge.edgeType}:${edge.sourceSymbol || ''}${edge.edgeType === 'http' ? `:${edge.targetSymbol || ''}` : ''}`;
       if (!this.graph.hasEdge(edgeKey)) {
         try {
           this.graph.addDirectedEdgeWithKey(edgeKey, sourceId, targetId, {
@@ -66,7 +69,7 @@ export class MapxGraph {
     }
   }
 
-  computePageRank(): Map<string, number> {
+  computePageRank(excludePatterns?: string[]): Map<string, number> {
     try {
       const scores = pagerank(this.graph, { alpha: 0.85 } as any);
       for (const [node, score] of Object.entries(scores)) {
@@ -74,14 +77,25 @@ export class MapxGraph {
           this.graph.mergeNodeAttributes(node, { pagerank: score });
         }
       }
-      return new Map(Object.entries(scores));
+      let result = new Map(Object.entries(scores));
+      if (excludePatterns && excludePatterns.length > 0) {
+        const matchers = excludePatterns.map(p => picomatch(p, { dot: true, nocase: true }));
+        result = new Map(
+          [...result.entries()].filter(([nodeId]) => {
+            const attrs = this.graph.getNodeAttributes(nodeId);
+            if (attrs.type !== 'file') return true;
+            return !matchers.some(m => m(attrs.path));
+          })
+        );
+      }
+      return result;
     } catch {
       return new Map();
     }
   }
 
-  getRankedFiles(): Array<{ path: string; pagerank: number; language: string }> {
-    const scores = this.computePageRank();
+  getRankedFiles(excludePatterns?: string[]): Array<{ path: string; pagerank: number; language: string }> {
+    const scores = this.computePageRank(excludePatterns);
     const files: Array<{ path: string; pagerank: number; language: string }> = [];
 
     for (const [nodeId, score] of scores) {
@@ -95,8 +109,8 @@ export class MapxGraph {
     return files;
   }
 
-  getRankedSymbols(): Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> {
-    const fileRank = this.computePageRank();
+  getRankedSymbols(excludePatterns?: string[]): Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> {
+    const fileRank = this.computePageRank(excludePatterns);
     const symbols: Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> = [];
 
     for (const node of this.graph.nodes()) {
@@ -130,6 +144,7 @@ export class MapxGraph {
       if (attrs.type !== 'contains') {
         const target = this.graph.getNodeAttributes(this.graph.target(edge));
         if (target.type === 'file') {
+          if (target.path === filePath) continue;  // skip self-edges
           deps.push({ target: target.path, type: attrs.type });
         }
       }
@@ -147,6 +162,7 @@ export class MapxGraph {
       if (attrs.type !== 'contains') {
         const source = this.graph.getNodeAttributes(this.graph.source(edge));
         if (source.type === 'file') {
+          if (source.path === filePath) continue;  // skip self-edges
           rdeps.push({ source: source.path, type: attrs.type });
         }
       }
@@ -177,6 +193,11 @@ export class MapxGraph {
       if (attrs.type !== 'contains') count++;
     }
     return count;
+  }
+
+  dropEdgesByType(edgeType: string): void {
+    const toDrop = this.graph.edges().filter(edge => this.graph.getEdgeAttributes(edge).type === edgeType);
+    for (const edge of toDrop) this.graph.dropEdge(edge);
   }
 
   dropFrameworkEdgesForRepo(repoName: string): void {

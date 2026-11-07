@@ -11,7 +11,9 @@ describe('FlowTracer module', () => {
       ],
       getAllSymbols: (repo?: string) => [
         { name: 'App', scope: null, file_path: 'src/main.ts' },
-        { name: 'format', scope: 'Formatter', file_path: 'src/utils.ts' }
+        { name: 'format', scope: 'Formatter', file_path: 'src/utils.ts' },
+        { name: 'getEffectiveLimits', scope: 'BillingService', file_path: 'src/billing.ts' },
+        { name: 'deepMethod', scope: 'NamespaceA::NamespaceB::ClassC', file_path: 'src/deep.ts' }
       ]
     } as unknown as Store;
 
@@ -25,6 +27,13 @@ describe('FlowTracer module', () => {
     expect(tracer.resolveStart('App')).toEqual({ file: 'src/main.ts', symbol: 'App' });
     // Resolve scoped symbol
     expect(tracer.resolveStart('Formatter::format')).toEqual({ file: 'src/utils.ts', symbol: 'Formatter::format' });
+    expect(tracer.resolveStart('Formatter.format')).toEqual({ file: 'src/utils.ts', symbol: 'Formatter::format' });
+    // Resolve billing limits using double colon and dot
+    expect(tracer.resolveStart('BillingService::getEffectiveLimits')).toEqual({ file: 'src/billing.ts', symbol: 'BillingService::getEffectiveLimits' });
+    expect(tracer.resolveStart('BillingService.getEffectiveLimits')).toEqual({ file: 'src/billing.ts', symbol: 'BillingService::getEffectiveLimits' });
+    // Resolve multi-level scoped symbol
+    expect(tracer.resolveStart('NamespaceA::NamespaceB::ClassC::deepMethod')).toEqual({ file: 'src/deep.ts', symbol: 'NamespaceA::NamespaceB::ClassC::deepMethod' });
+    expect(tracer.resolveStart('NamespaceA.NamespaceB.ClassC.deepMethod')).toEqual({ file: 'src/deep.ts', symbol: 'NamespaceA::NamespaceB::ClassC::deepMethod' });
     // Unresolved
     expect(tracer.resolveStart('nonexistent')).toBeNull();
   });

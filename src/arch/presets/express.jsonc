@@ -1,0 +1,32 @@
+// mapx:preset/express: an Express application (routes, controllers, services, models).
+// AR-15 (M5-17-R1). By the folder layout most Express apps and generators use. Routes reach the
+// domain only through controllers; models depend on configuration only.
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // The application and server setup.
+    { "name": "App", "selectors": [{ "path": "%root%{app,server,index}.{js,ts,mjs,cjs}" }] },
+    // Routers: they map paths to controllers and middleware.
+    { "name": "Routes", "selectors": [{ "path": "%root%{routes,routers,router}/**" }] },
+    // Request handlers.
+    { "name": "Controllers", "selectors": [{ "path": "%root%{controllers,controller,handlers}/**" }] },
+    // Middleware: authentication, validation, error handling.
+    { "name": "Middleware", "selectors": [{ "path": "%root%{middleware,middlewares}/**" }] },
+    // Business logic.
+    { "name": "Services", "selectors": [{ "path": "%root%{services,service}/**" }] },
+    // Data models and schemas (Mongoose, Sequelize, plain classes).
+    { "name": "Models", "selectors": [{ "path": "%root%{models,model}/**" }] },
+    // Settings every layer may read.
+    { "name": "Config", "selectors": [{ "path": "%root%{config,configs}/**" }] }
+  ],
+  "rules": {
+    "App": ["Routes", "Middleware", "Config"],
+    "Routes": ["Controllers", "Middleware"],
+    "Controllers": ["Services", "Config"],
+    "Middleware": ["Services", "Config"],
+    "Services": ["Models", "Config"],
+    "Models": ["Config"],
+    "Config": []
+  }
+}

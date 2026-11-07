@@ -1,0 +1,22 @@
+{
+  "$comment": "Recorded accuracy floors (M4-01). Floors only ever rise: a task that improves extraction raises them here; the fixture tests and `npm run eval` (CI) both read this file. `min`/`max` bound the scorer's totals; `patterns` bound each pattern, `*` being the default a named pattern overrides. `fixture` is relative to the repository root. routes `flagged` counts the negatives and conditional mounts reported with their liveness flag.",
+  "routes": {
+    "fixture": "tests/fixtures/laravel-routes",
+    "strictParams": true,
+    "min": { "uriRecall": 1, "handlerRecall": 1, "attributeRecall": 1, "precision": 1, "flagged": 36, "exactParams": 122 },
+    "max": { "falsePositives": 0 }
+  },
+  "http": {
+    "fixture": "tests/fixtures/vue-http",
+    "min": { "callSiteRecall": 1, "urlRecall": 1, "pairingRecall": 1, "pairingPrecision": 1 }
+  },
+  "edges": {
+    "fixture": "tests/fixtures/vue-sfc",
+    "min": { "recall": 1, "precision": 0.99 },
+    "max": { "falsePositives": 1 },
+    "patterns": {
+      "*": { "min": { "recall": 1 }, "max": { "falsePositives": 0 } },
+      "composable": { "max": { "falsePositives": 1 } }
+    }
+  }
+}

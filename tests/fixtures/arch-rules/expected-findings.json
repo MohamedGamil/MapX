@@ -1,0 +1,3323 @@
+{
+  "version": 1,
+  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11). M5-24: a row whose \"to\" names \"external\" (\"<ecosystem>:<name>\", as npm:pg) is a dependency on something outside the workspace (src/arch/elements.ts): the existing apps' rows on every external package their layered code uses were derived from expected-externals.json by the granularity rules as uncovered; since D039 (M5-24-R4) they are \"none\" rows, as those configurations have no package selector and no policy.uncovered.externals, so packages are out of scope (built-ins are not reported either); the ts-vendor, python-vendor, php-vendor and go-vendor apps confine a package to the layer that may use it (a package selector) and deny an overlay of dev-only packages.",
+  "apps": {
+    "php": {
+      "language": "php",
+      "repos": null
+    },
+    "ts": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python": {
+      "language": "python",
+      "repos": null
+    },
+    "go": {
+      "language": "go",
+      "repos": null
+    },
+    "php-broken-cycle": {
+      "language": "php",
+      "repos": null
+    },
+    "workspace": {
+      "language": "typescript",
+      "repos": [
+        "frontend",
+        "backend"
+      ]
+    },
+    "ts-vendor": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python-vendor": {
+      "language": "python",
+      "repos": null
+    },
+    "php-vendor": {
+      "language": "php",
+      "repos": null
+    },
+    "go-vendor": {
+      "language": "go",
+      "repos": null
+    },
+    "python-poetry": {
+      "language": "python",
+      "repos": null
+    },
+    "python-pip": {
+      "language": "python",
+      "repos": null
+    },
+    "python-poetry-legacy": {
+      "language": "python",
+      "repos": null
+    },
+    "ts-ambient": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python-ambient": {
+      "language": "python",
+      "repos": null
+    },
+    "php-ambient": {
+      "language": "php",
+      "repos": null
+    },
+    "go-ambient": {
+      "language": "go",
+      "repos": null
+    }
+  },
+  "rows": [
+    {
+      "id": "php-01",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "php-02",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "php-03",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Controller/BaseController.php",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "php-04",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Controller/BaseController.php",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "php-05",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "php-06",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "php-07",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "skipped",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure; accepted in .mapx/architecture.baseline.json"
+    },
+    {
+      "id": "php-08",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Shared/Result.php",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "php-09",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "php-10",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/Shared/Result.php",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "php-11",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "php-12",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/MailGateway.php",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "php-13",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "php-14",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/Shared/Text.php",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "php-15",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/Ids/OrderId.php",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "php-16",
+      "app": "php",
+      "language": "php",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Application/Internal/PricingRules.php",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "php-17",
+      "app": "php",
+      "language": "php",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Application/Internal/TaxRules.php",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "php-18",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Application/Internal/PricingRules.php",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "php-19",
+      "app": "php",
+      "language": "php",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Domain/LedgerHelper.php",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "php-20",
+      "app": "php",
+      "language": "php",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/Domain/AuditTrail.php",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "php-21",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/LedgerHelper.php",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "php-22",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Support/Clock.php",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "php-23",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/MailGateway.php",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/Support/Uuid.php",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "php-24",
+      "app": "php",
+      "language": "php",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "app/Domain/Ids/OrderId.php",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "php-25",
+      "app": "php",
+      "language": "php",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "ts-01",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "ts-02",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "ts-03",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/controller/BaseController.ts",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "ts-04",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/controller/BaseController.ts",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "ts-05",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "ts-06",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "ts-07",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "ts-08",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/shared/Result.ts",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "ts-09",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "ts-10",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "src/shared/Result.ts",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "ts-11",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "ts-12",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/MailGateway.ts",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "ts-13",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "ts-14",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "src/shared/Text.ts",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "ts-15",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/ids/OrderId.ts",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "ts-16",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/application/internal/PricingRules.ts",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "ts-17",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/application/internal/TaxRules.ts",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "ts-18",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/application/internal/PricingRules.ts",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "ts-19",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/domain/LedgerHelper.ts",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "ts-20",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "src/domain/AuditTrail.ts",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "ts-21",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/LedgerHelper.ts",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "ts-22",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/support/Clock.ts",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "ts-23",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/MailGateway.ts",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "src/support/Uuid.ts",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "ts-24",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "src/domain/ids/OrderId.ts",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "ts-25",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "python-01",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "python-02",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "python-03",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/controller/base_controller.py",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "python-04",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/controller/base_controller.py",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "python-05",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "python-06",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "python-07",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "python-08",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/shared/result.py",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "python-09",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "python-10",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/shared/result.py",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "python-11",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "python-12",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/mail_gateway.py",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "python-13",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "python-14",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/shared/text.py",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "python-15",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/ids/order_id.py",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "python-16",
+      "app": "python",
+      "language": "python",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/application/internal/pricing_rules.py",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "python-17",
+      "app": "python",
+      "language": "python",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/application/internal/tax_rules.py",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "python-18",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/application/internal/pricing_rules.py",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "python-19",
+      "app": "python",
+      "language": "python",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/domain/ledger_helper.py",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "python-20",
+      "app": "python",
+      "language": "python",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/domain/audit_trail.py",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "python-21",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/ledger_helper.py",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "python-22",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/support/clock.py",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "python-23",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/mail_gateway.py",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/support/uuid.py",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "python-24",
+      "app": "python",
+      "language": "python",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "app/domain/ids/order_id.py",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "python-25",
+      "app": "python",
+      "language": "python",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "python-26",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element"
+      },
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/_journal.py",
+        "symbol": "Journal"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, the module _journal is internal to Domain (M5-11)",
+      "edgeTypes": [
+        "call",
+        "import",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "python-27",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element",
+        "edgeTypes": [
+          "call",
+          "import"
+        ]
+      },
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/rounding.py",
+        "symbol": "_round_half_even"
+      },
+      "edgeType": "call",
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, the function _round_half_even is internal to its module: its call, and the import that names it (without native markers that import is a file-level dependency on rounding.py) (M5-11)",
+      "edgeTypes": [
+        "call"
+      ]
+    },
+    {
+      "id": "python-28",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/rounding.py",
+        "symbol": "round_amount"
+      },
+      "edgeType": "call",
+      "note": "Application \u2192 Domain through +Domain, with or without native markers: round_amount is public. Its import is a file-level dependency on rounding.py (M5-11)",
+      "edgeTypes": [
+        "call"
+      ]
+    },
+    {
+      "id": "go-01",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "go-02",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "go-03",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "controller/base_controller.go",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "go-04",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "controller/base_controller.go",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "go-05",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "go-06",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "go-07",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "go-08",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "shared/result.go",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "go-09",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "go-10",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "shared/result.go",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "go-11",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "go-12",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/mail_gateway.go",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "go-13",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "go-14",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "shared/text.go",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "go-15",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/ids/order_id.go",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "go-16",
+      "app": "go",
+      "language": "go",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "application/appinternal/pricing_rules.go",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "go-17",
+      "app": "go",
+      "language": "go",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "application/appinternal/tax_rules.go",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "go-18",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "application/appinternal/pricing_rules.go",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "go-19",
+      "app": "go",
+      "language": "go",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "domain/ledger_helper.go",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "go-20",
+      "app": "go",
+      "language": "go",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "domain/audit_trail.go",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "go-21",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/ledger_helper.go",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "go-22",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "support/clock.go",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "go-23",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/mail_gateway.go",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "support/uuid.go",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "go-24",
+      "app": "go",
+      "language": "go",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "domain/ids/order_id.go",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "go-25",
+      "app": "go",
+      "language": "go",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "go-26",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "internal/ledger/journal.go",
+        "symbol": "Journal"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain. Journal is under a module-root internal/: Go lets the whole module import it, so it stays allowed with visibility.nativeMarkers too (M5-11)",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "go-27",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain, with or without native markers (M5-11)",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "go-28",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element"
+      },
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "domain/internal/vault/vault.go",
+        "symbol": "Vault"
+      },
+      "edgeType": "instantiation",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ],
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, Vault is under domain/internal/, which Go lets only code rooted at domain/ import: internal to Domain (M5-11)"
+    },
+    {
+      "id": "php-26",
+      "app": "php",
+      "language": "php",
+      "rule": "stale-baseline",
+      "kind": "error",
+      "from": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "a baseline entry for a dependency that does not exist"
+    },
+    {
+      "id": "php-broken-cycle-01",
+      "app": "php-broken-cycle",
+      "language": "php",
+      "rule": "plus-cycle",
+      "kind": "error",
+      "layer": "Application",
+      "note": "\"+\" allowances form a cycle: Application \u2192 Domain \u2192 Application"
+    },
+    {
+      "id": "workspace-01",
+      "app": "workspace",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "frontend/src/orders.ts",
+        "symbol": "listOrders"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Api/OrderController.php",
+        "symbol": "index"
+      },
+      "edgeType": "http",
+      "note": "Frontend \u2192 PublicApi over http is allowed"
+    },
+    {
+      "id": "workspace-02",
+      "app": "workspace",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "frontend/src/admin.ts",
+        "symbol": "listUsers"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Admin/UserController.php",
+        "symbol": "index"
+      },
+      "edgeType": "http",
+      "note": "Frontend \u2192 Backend (an admin controller outside PublicApi)"
+    },
+    {
+      "id": "workspace-03",
+      "app": "workspace",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "backend/routes/api.php"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Api/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "edgeType": "import",
+      "note": "Backend \u2192 PublicApi: the route file imports the API controller, and Backend may use nothing. Added by M5-04 (2026-11-02): a true dependency the M5-01 labels missed; the configuration is unchanged"
+    },
+    {
+      "id": "go-x01",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/http_gateway.go",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/google/uuid"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): github.com/google/uuid is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "go-x02",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/http_gateway.go",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/sirupsen/logrus"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): github.com/sirupsen/logrus is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "go-x03",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/google/uuid"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): github.com/google/uuid is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "go-x04",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/stretchr/testify"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): github.com/stretchr/testify is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "go-x05",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:gopkg.in/yaml.v3"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24-R4 (D039): gopkg.in/yaml.v3 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "go-x06",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/system_probe.go",
+        "symbol": "SystemProbe"
+      },
+      "to": {
+        "external": "go:github.com/pkg/errors"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): github.com/pkg/errors is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "go-x07",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/system_probe.go",
+        "symbol": "SystemProbe"
+      },
+      "to": {
+        "external": "go:golang.org/x/sys"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): golang.org/x/sys is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x01",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:Acme\\Missing\\Widget"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24-R4 (D039): Acme\\Missing\\Widget is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x02",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Str"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Str is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x03",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:collect"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): collect is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x04",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:doctrine/event-manager"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24-R4 (D039): doctrine/event-manager is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x05",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:doctrine/instantiator"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24-R4 (D039): doctrine/instantiator is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x06",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:fakerphp/faker"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): fakerphp/faker is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x07",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/guzzle"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24-R4 (D039): guzzlehttp/guzzle is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x08",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/psr7"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): guzzlehttp/psr7 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x09",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:illuminate/routing"
+      },
+      "edgeType": "extends",
+      "note": "M5-24-R4 (D039): illuminate/routing is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x10",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:mustache/mustache"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24-R4 (D039): mustache/mustache is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x11",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:myclabs/deep-copy"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): myclabs/deep-copy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x12",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:nesbot/carbon"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): nesbot/carbon is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x13",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:phpunit/phpunit"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): phpunit/phpunit is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "php-x14",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:psr/log"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "param_type"
+      ],
+      "note": "M5-24-R4 (D039): psr/log is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x01",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:acme_missing"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): acme_missing is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "python-x02",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:flask"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "extends"
+      ],
+      "note": "M5-24-R4 (D039): flask is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x03",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:jinja2"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): jinja2 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x04",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:markupsafe"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): markupsafe is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x05",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pillow"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): pillow is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x06",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pluggy"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): pluggy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x07",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pysocks"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): pysocks is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x08",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pytest"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): pytest is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x09",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pyyaml"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): pyyaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x10",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:requests"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24-R4 (D039): requests is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x11",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:sklearn"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): sklearn is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "python-x12",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): sqlalchemy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "python-x13",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:urllib3"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): urllib3 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x01",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:@acme/logging"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): @acme/logging is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x02",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): express is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x03",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:js-yaml"
+      },
+      "edgeType": "require",
+      "note": "M5-24-R4 (D039): js-yaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x04",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): pg is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x05",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:react"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): react is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x06",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:reflect-metadata"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): reflect-metadata is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x07",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:@acme/logging"
+      },
+      "edgeType": "param_type",
+      "note": "M5-24-R4 (D039): @acme/logging is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x08",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): express is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x09",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:js-yaml"
+      },
+      "edgeType": "call",
+      "note": "M5-24-R4 (D039): js-yaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x10",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "instantiation",
+      "edgeTypes": [
+        "instantiation",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): pg is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x11",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:react"
+      },
+      "edgeType": "extends",
+      "note": "M5-24-R4 (D039): react is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x12",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:debug"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): debug is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x13",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:left-pad"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): left-pad is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x14",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:lodash"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): lodash is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x15",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:semver"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): semver is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "ts-x16",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:sqlite"
+      },
+      "edgeType": "import",
+      "note": "M5-24-R4 (D039): sqlite is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
+    },
+    {
+      "id": "workspace-x01",
+      "app": "workspace",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "backend/routes/api.php"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Facades\\Route"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Facades\\Route is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "workspace-x02",
+      "app": "workspace",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "backend/routes/web.php"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Facades\\Route"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Facades\\Route is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "ts-vendor-01",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: pg is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "ts-vendor-02",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:lodash"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: lodash is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "ts-vendor-03",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Server.ts",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "express is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-vendor-04",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/Database.ts",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "ts-vendor-05",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Server.ts",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "npm:node:fs"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "python-vendor-01",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: sqlalchemy is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "python-vendor-02",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:pytest"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: pytest is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "python-vendor-03",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/server.py",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "pypi:flask"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "flask is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "python-vendor-04",
+      "app": "python-vendor",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/database.py",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "python-vendor-05",
+      "app": "python-vendor",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/server.py",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "pypi:python:os"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "php-vendor-01",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:doctrine/dbal"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "param_type"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: doctrine/dbal is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "php-vendor-02",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:fakerphp/faker"
+      },
+      "edgeType": "call",
+      "category": "dev-dependency",
+      "note": "dev dependency: fakerphp/faker is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "php-vendor-03",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/Server.php",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/guzzle"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "guzzlehttp/guzzle is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "php-vendor-04",
+      "app": "php-vendor",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/Database.php",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "composer:doctrine/dbal"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "php-vendor-05",
+      "app": "php-vendor",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/Server.php",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "composer:ext-core"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "go-vendor-01",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "go:github.com/jmoiron/sqlx"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: github.com/jmoiron/sqlx is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "go-vendor-02",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order_test.go",
+        "symbol": "TestOrder"
+      },
+      "to": {
+        "external": "go:github.com/stretchr/testify"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: testify is dev-only (only _test.go files use it), and every layer denies the DevOnly overlay; this test is in the Domain layer's path"
+    },
+    {
+      "id": "go-vendor-03",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/server.go",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "go:github.com/sirupsen/logrus"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "github.com/sirupsen/logrus is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "go-vendor-04",
+      "app": "go-vendor",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/database.go",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "go:github.com/jmoiron/sqlx"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "go-vendor-05",
+      "app": "go-vendor",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/server.go",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "go:fmt"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "ts-ambient-01",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "ts-ambient-02",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/Config.ts",
+        "symbol": "port"
+      },
+      "to": {
+        "external": "npm:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "ts-ambient-03",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Browser.ts",
+        "symbol": "Browser"
+      },
+      "to": {
+        "external": "npm:window"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "python-ambient-01",
+      "app": "python-ambient",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "python-ambient-02",
+      "app": "python-ambient",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/config.py"
+      },
+      "to": {
+        "external": "pypi:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "python-ambient-03",
+      "app": "python-ambient",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/config.py"
+      },
+      "to": {
+        "external": "pypi:argv"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "php-ambient-01",
+      "app": "php-ambient",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "php-ambient-02",
+      "app": "php-ambient",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/Request.php",
+        "symbol": "Request"
+      },
+      "to": {
+        "external": "composer:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "php-ambient-03",
+      "app": "php-ambient",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/Request.php",
+        "symbol": "Request"
+      },
+      "to": {
+        "external": "composer:$_GET"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "go-ambient-01",
+      "app": "go-ambient",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "go:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "go-ambient-02",
+      "app": "go-ambient",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/config.go",
+        "symbol": "Config"
+      },
+      "to": {
+        "external": "go:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "go-ambient-03",
+      "app": "go-ambient",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/config.go",
+        "symbol": "Config"
+      },
+      "to": {
+        "external": "go:argv"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    }
+  ]
+}

@@ -55,8 +55,9 @@ function searchSymbolsFiltered(db: Database.Database, opts: {
   filePrefix?: string;
   exact?: boolean;
   limit?: number;
+  offset?: number;
 }): any[] {
-  const { term = '*', kind, filePrefix, exact = false, limit = 20 } = opts;
+  const { term = '*', kind, filePrefix, exact = false, limit = 20, offset = 0 } = opts;
   const conditions: string[] = [];
   const params: any[] = [];
 
@@ -85,9 +86,47 @@ function searchSymbolsFiltered(db: Database.Database, opts: {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(limit);
+  params.push(limit, offset);
 
-  return db.prepare(`SELECT * FROM symbols ${where} ORDER BY name COLLATE NOCASE LIMIT ?`).all(...params);
+  return db.prepare(`SELECT * FROM symbols ${where} ORDER BY name COLLATE NOCASE LIMIT ? OFFSET ?`).all(...params);
+}
+
+function countSymbolsFiltered(db: Database.Database, opts: {
+  term?: string;
+  kind?: string;
+  filePrefix?: string;
+  exact?: boolean;
+}): number {
+  const { term = '*', kind, filePrefix, exact = false } = opts;
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (isWildcard(term)) {
+    // No name constraint
+  } else if (exact) {
+    conditions.push('name = ? COLLATE NOCASE');
+    params.push(term);
+  } else if (isGlobPattern(term)) {
+    conditions.push('name LIKE ? COLLATE NOCASE');
+    params.push(globToLike(term));
+  } else {
+    conditions.push('name LIKE ? COLLATE NOCASE');
+    params.push(`%${term}%`);
+  }
+
+  if (kind) {
+    conditions.push('kind = ? COLLATE NOCASE');
+    params.push(kind);
+  }
+
+  if (filePrefix) {
+    conditions.push('file_path LIKE ?');
+    params.push(`${filePrefix}%`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const row = db.prepare(`SELECT COUNT(*) as cnt FROM symbols ${where}`).get(...params) as { cnt: number };
+  return row?.cnt ?? 0;
 }
 
 function listSymbolKinds(db: Database.Database): Array<{ kind: string; count: number }> {
@@ -212,6 +251,67 @@ describe('Store — search enhancements', () => {
       const results = searchSymbolsFiltered(db, { term: '*', kind: 'constant' });
       expect(results.length).toBe(1);
       expect(results[0].name).toBe('MAX_RETRIES');
+    });
+
+    it('should paginate with offset — first page', () => {
+      const page1 = searchSymbolsFiltered(db, { term: '*', limit: 3, offset: 0 });
+      expect(page1.length).toBe(3);
+    });
+
+    it('should paginate with offset — second page returns different results', () => {
+      const page1 = searchSymbolsFiltered(db, { term: '*', limit: 3, offset: 0 });
+      const page2 = searchSymbolsFiltered(db, { term: '*', limit: 3, offset: 3 });
+      const page1Names = page1.map((s: any) => s.name);
+      const page2Names = page2.map((s: any) => s.name);
+      // No overlap between pages
+      expect(page1Names.some((n: string) => page2Names.includes(n))).toBe(false);
+    });
+
+    it('should paginate with offset — last page returns remaining items', () => {
+      const total = searchSymbolsFiltered(db, { term: '*', limit: 200, offset: 0 }).length;
+      const lastPage = searchSymbolsFiltered(db, { term: '*', limit: 3, offset: total - 1 });
+      expect(lastPage.length).toBe(1);
+    });
+
+    it('should return empty array when offset exceeds total', () => {
+      const results = searchSymbolsFiltered(db, { term: '*', limit: 5, offset: 999 });
+      expect(results.length).toBe(0);
+    });
+  });
+
+  describe('countSymbolsFiltered (pagination total)', () => {
+    it('should count all symbols with wildcard', () => {
+      const count = countSymbolsFiltered(db, { term: '*' });
+      expect(count).toBe(9);
+    });
+
+    it('should count symbols filtered by kind', () => {
+      const count = countSymbolsFiltered(db, { term: '*', kind: 'class' });
+      expect(count).toBe(3);
+    });
+
+    it('should count symbols filtered by file prefix', () => {
+      const count = countSymbolsFiltered(db, { term: '*', filePrefix: 'src/services/' });
+      expect(count).toBeGreaterThan(0);
+      const all = searchSymbolsFiltered(db, { term: '*', filePrefix: 'src/services/', limit: 200 });
+      expect(count).toBe(all.length);
+    });
+
+    it('should count exact matches', () => {
+      const count = countSymbolsFiltered(db, { term: 'UserService', exact: true });
+      expect(count).toBe(1);
+    });
+
+    it('should return 0 for non-existent kind', () => {
+      const count = countSymbolsFiltered(db, { term: '*', kind: 'nonexistent' });
+      expect(count).toBe(0);
+    });
+
+    it('count should equal total rows returned by paginated queries combined', () => {
+      const total = countSymbolsFiltered(db, { term: '*', kind: 'method' });
+      const page1 = searchSymbolsFiltered(db, { term: '*', kind: 'method', limit: 2, offset: 0 });
+      const page2 = searchSymbolsFiltered(db, { term: '*', kind: 'method', limit: 2, offset: 2 });
+      expect(page1.length + page2.length).toBe(total);
     });
   });
 

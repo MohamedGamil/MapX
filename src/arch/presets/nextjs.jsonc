@@ -1,0 +1,49 @@
+// mapx:preset/nextjs: a Next.js application (App Router or Pages Router).
+// AR-15 (M5-17-R1). By Next's routing folders and the usual shared folders, top-level or colocated
+// in app/ (the Next.js Learn layout: app/ui, app/lib). Route handlers (app/**/route.ts, pages/api/**)
+// and middleware are the HTTP surface; server actions (actions.ts files, actions/) are their own
+// layer, which pages and components may call; lib/ depends on nothing in the app.
+// Parameter: root, the folder holding app/ or pages/ ("" by default; "src/" with the src directory).
+{
+  "parameters": { "root": "" },
+  "layers": [
+    // Pages, layouts, loading and error states of app/ and pages/: the rest of app/ and pages/.
+    { "name": "Routes", "selectors": [{ "all": [
+      { "path": "%root%{app,pages}/**" },
+      { "not": { "any": [
+        { "path": "%root%app/**/route.{ts,tsx,js,jsx}" },
+        { "path": "%root%pages/api/**" },
+        { "path": "%root%**/actions.{ts,tsx,js,jsx}" },
+        { "path": "%root%app/{_components,components,ui,_hooks,hooks,_lib,lib,utils}/**" }
+      ] } }
+    ] }] },
+    // Route handlers, API routes and middleware: the HTTP surface.
+    { "name": "Api", "selectors": [
+      { "path": "%root%app/**/route.{ts,tsx,js,jsx}" },
+      { "path": "%root%pages/api/**" },
+      { "path": "%root%middleware.{ts,js}" }
+    ] },
+    // Server actions.
+    { "name": "Actions", "selectors": [{ "path": "%root%**/actions.{ts,tsx,js,jsx}" }, { "path": "%root%actions/**" }] },
+    // React components.
+    { "name": "Components", "selectors": [{ "all": [
+      { "any": [{ "path": "%root%{components,ui}/**" }, { "path": "%root%app/{_components,components,ui}/**" }] },
+      { "not": { "path": "%root%**/actions.{ts,tsx,js,jsx}" } }
+    ] }] },
+    // React hooks.
+    { "name": "Hooks", "selectors": [{ "path": "%root%hooks/**" }, { "path": "%root%app/{_hooks,hooks}/**" }] },
+    // Data access, utilities and types.
+    { "name": "Lib", "selectors": [{ "all": [
+      { "any": [{ "path": "%root%{lib,utils,services,types}/**" }, { "path": "%root%app/{_lib,lib,utils}/**" }] },
+      { "not": { "path": "%root%**/actions.{ts,tsx,js,jsx}" } }
+    ] }] }
+  ],
+  "rules": {
+    "Routes": ["Components", "Hooks", "Actions", "Lib"],
+    "Api": ["Actions", "Lib"],
+    "Actions": ["Lib"],
+    "Components": ["Hooks", "Actions", "Lib"],
+    "Hooks": ["Actions", "Lib"],
+    "Lib": []
+  }
+}

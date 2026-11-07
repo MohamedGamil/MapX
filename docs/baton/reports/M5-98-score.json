@@ -1,0 +1,794 @@
+{
+  "apps": [
+    {
+      "app": "php",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 7,
+          "reported": 7,
+          "matched": 7,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        },
+        "uncovered": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "error": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "ts",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 8,
+          "reported": 8,
+          "matched": 8,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "python",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 8,
+          "reported": 8,
+          "matched": 8,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "go",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 8,
+          "reported": 8,
+          "matched": 8,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "php-broken-cycle",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "workspace",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {},
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "ts-vendor",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {
+        "npm": {
+          "expected": 3,
+          "reported": 3,
+          "matched": 3,
+          "categories": {
+            "vendor-confinement": {
+              "expected": 1,
+              "matched": 1
+            },
+            "dev-dependency": {
+              "expected": 1,
+              "matched": 1
+            },
+            "uncovered": {
+              "expected": 1,
+              "matched": 1
+            }
+          }
+        }
+      },
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "python-vendor",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {
+        "pypi": {
+          "expected": 3,
+          "reported": 3,
+          "matched": 3,
+          "categories": {
+            "vendor-confinement": {
+              "expected": 1,
+              "matched": 1
+            },
+            "dev-dependency": {
+              "expected": 1,
+              "matched": 1
+            },
+            "uncovered": {
+              "expected": 1,
+              "matched": 1
+            }
+          }
+        }
+      },
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "php-vendor",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {
+        "composer": {
+          "expected": 3,
+          "reported": 3,
+          "matched": 3,
+          "categories": {
+            "vendor-confinement": {
+              "expected": 1,
+              "matched": 1
+            },
+            "dev-dependency": {
+              "expected": 1,
+              "matched": 1
+            },
+            "uncovered": {
+              "expected": 1,
+              "matched": 1
+            }
+          }
+        }
+      },
+      "negativeHits": [],
+      "misses": []
+    },
+    {
+      "app": "go-vendor",
+      "report": true,
+      "kinds": {
+        "violation": {
+          "expected": 2,
+          "reported": 2,
+          "matched": 2,
+          "recall": 1,
+          "precision": 1
+        },
+        "skipped": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "uncovered": {
+          "expected": 1,
+          "reported": 1,
+          "matched": 1,
+          "recall": 1,
+          "precision": 1
+        },
+        "warning": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        },
+        "error": {
+          "expected": 0,
+          "reported": 0,
+          "matched": 0,
+          "recall": 1,
+          "precision": null
+        }
+      },
+      "external": {
+        "go": {
+          "expected": 3,
+          "reported": 3,
+          "matched": 3,
+          "categories": {
+            "vendor-confinement": {
+              "expected": 1,
+              "matched": 1
+            },
+            "dev-dependency": {
+              "expected": 1,
+              "matched": 1
+            },
+            "uncovered": {
+              "expected": 1,
+              "matched": 1
+            }
+          }
+        }
+      },
+      "negativeHits": [],
+      "misses": []
+    }
+  ],
+  "kinds": {
+    "violation": {
+      "expected": 41,
+      "reported": 41,
+      "matched": 41,
+      "recall": 1,
+      "precision": 1
+    },
+    "skipped": {
+      "expected": 1,
+      "reported": 1,
+      "matched": 1,
+      "recall": 1,
+      "precision": 1
+    },
+    "uncovered": {
+      "expected": 12,
+      "reported": 12,
+      "matched": 12,
+      "recall": 1,
+      "precision": 1
+    },
+    "warning": {
+      "expected": 8,
+      "reported": 8,
+      "matched": 8,
+      "recall": 1,
+      "precision": 1
+    },
+    "error": {
+      "expected": 2,
+      "reported": 2,
+      "matched": 2,
+      "recall": 1,
+      "precision": 1
+    }
+  },
+  "externalFindings": {
+    "npm": {
+      "expected": 3,
+      "reported": 3,
+      "matched": 3,
+      "categories": {
+        "vendor-confinement": {
+          "expected": 1,
+          "matched": 1
+        },
+        "dev-dependency": {
+          "expected": 1,
+          "matched": 1
+        },
+        "uncovered": {
+          "expected": 1,
+          "matched": 1
+        }
+      },
+      "recall": 1,
+      "precision": 1
+    },
+    "pypi": {
+      "expected": 3,
+      "reported": 3,
+      "matched": 3,
+      "categories": {
+        "vendor-confinement": {
+          "expected": 1,
+          "matched": 1
+        },
+        "dev-dependency": {
+          "expected": 1,
+          "matched": 1
+        },
+        "uncovered": {
+          "expected": 1,
+          "matched": 1
+        }
+      },
+      "recall": 1,
+      "precision": 1
+    },
+    "composer": {
+      "expected": 3,
+      "reported": 3,
+      "matched": 3,
+      "categories": {
+        "vendor-confinement": {
+          "expected": 1,
+          "matched": 1
+        },
+        "dev-dependency": {
+          "expected": 1,
+          "matched": 1
+        },
+        "uncovered": {
+          "expected": 1,
+          "matched": 1
+        }
+      },
+      "recall": 1,
+      "precision": 1
+    },
+    "go": {
+      "expected": 3,
+      "reported": 3,
+      "matched": 3,
+      "categories": {
+        "vendor-confinement": {
+          "expected": 1,
+          "matched": 1
+        },
+        "dev-dependency": {
+          "expected": 1,
+          "matched": 1
+        },
+        "uncovered": {
+          "expected": 1,
+          "matched": 1
+        }
+      },
+      "recall": 1,
+      "precision": 1
+    }
+  },
+  "externals": {
+    "composer": {
+      "expected": 32,
+      "reported": 32,
+      "matched": 32,
+      "recall": 1,
+      "precision": 1,
+      "classes": {
+        "direct-prod": {
+          "expected": 11,
+          "matched": 11
+        },
+        "transitive-prod": {
+          "expected": 4,
+          "matched": 4
+        },
+        "builtin": {
+          "expected": 5,
+          "matched": 5
+        },
+        "direct-dev": {
+          "expected": 3,
+          "matched": 3
+        },
+        "transitive-dev": {
+          "expected": 2,
+          "matched": 2
+        },
+        "unknown": {
+          "expected": 7,
+          "matched": 7
+        }
+      },
+      "misses": [],
+      "extras": []
+    },
+    "go": {
+      "expected": 33,
+      "reported": 33,
+      "matched": 33,
+      "recall": 1,
+      "precision": 1,
+      "classes": {
+        "builtin": {
+          "expected": 10,
+          "matched": 10
+        },
+        "direct-prod": {
+          "expected": 12,
+          "matched": 12
+        },
+        "direct-dev": {
+          "expected": 4,
+          "matched": 4
+        },
+        "transitive-dev": {
+          "expected": 2,
+          "matched": 2
+        },
+        "ambient": {
+          "expected": 1,
+          "matched": 1
+        },
+        "unknown": {
+          "expected": 2,
+          "matched": 2
+        },
+        "transitive-prod": {
+          "expected": 2,
+          "matched": 2
+        }
+      },
+      "misses": [],
+      "extras": []
+    },
+    "npm": {
+      "expected": 36,
+      "reported": 36,
+      "matched": 36,
+      "recall": 1,
+      "precision": 1,
+      "classes": {
+        "direct-prod": {
+          "expected": 17,
+          "matched": 17
+        },
+        "builtin": {
+          "expected": 8,
+          "matched": 8
+        },
+        "direct-dev": {
+          "expected": 4,
+          "matched": 4
+        },
+        "transitive-prod": {
+          "expected": 4,
+          "matched": 4
+        },
+        "transitive-dev": {
+          "expected": 2,
+          "matched": 2
+        },
+        "unlisted": {
+          "expected": 1,
+          "matched": 1
+        }
+      },
+      "misses": [],
+      "extras": []
+    },
+    "pypi": {
+      "expected": 37,
+      "reported": 37,
+      "matched": 37,
+      "recall": 1,
+      "precision": 1,
+      "classes": {
+        "builtin": {
+          "expected": 10,
+          "matched": 10
+        },
+        "direct-prod": {
+          "expected": 17,
+          "matched": 17
+        },
+        "transitive-prod": {
+          "expected": 4,
+          "matched": 4
+        },
+        "direct-dev": {
+          "expected": 3,
+          "matched": 3
+        },
+        "transitive-dev": {
+          "expected": 1,
+          "matched": 1
+        },
+        "unknown": {
+          "expected": 2,
+          "matched": 2
+        }
+      },
+      "misses": [],
+      "extras": []
+    }
+  },
+  "failures": []
+}

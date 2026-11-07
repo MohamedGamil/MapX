@@ -117,7 +117,22 @@ function Do-Install {
     Write-Host ""
 
     New-Item -ItemType Directory -Path $script:Prefix -Force | Out-Null
-    Copy-Item $binary $target -Force
+    # Windows refuses to overwrite or delete a mapx.exe that `mapx serve` processes run, but lets
+    # it be renamed (M4-29): move the old one aside under a unique name, then copy the new one in.
+    # The aside copies nothing runs any more are removed; the next install removes the rest.
+    $aside = $null
+    if (Test-Path $target) {
+        $aside = "$target.$([System.Guid]::NewGuid().ToString('N')).old"
+        Move-Item $target $aside -Force
+    }
+    try {
+        Copy-Item $binary $target -Force
+    } catch {
+        if ($aside) { Move-Item $aside $target -Force }
+        throw
+    }
+    Get-ChildItem -Path $script:Prefix -Filter "mapx.exe.*.old" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     Write-OK "Binary: $target"
 
     Install-Data
@@ -171,6 +186,9 @@ function Do-Uninstall {
     }
 
     Remove-Item $target -Force
+    # The old binaries an install moved aside (M4-29); one still running stays until it exits.
+    Get-ChildItem -Path (Split-Path $target) -Filter "mapx.exe.*.old" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     Write-OK "Removed binary: $target"
 
     if (Test-Path $script:DataDir) {

@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://unpkg.com/@mgamil/mapx/schemas/arch-report.schema.json",
+  "title": "MapX architecture report",
+  "description": "What `mapx check --format json` prints: the findings of the architecture rules (.mapx/architecture.jsonc) on the index, with counts, layer sizes and the layer-to-layer matrix.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "counts", "findings", "layers", "layerEdges", "configErrors"],
+  "properties": {
+    "version": { "const": 1 },
+    "counts": {
+      "description": "Findings per kind, before --report-* options hide any.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["violation", "skipped", "uncovered", "allowed", "warning", "error"],
+      "properties": {
+        "violation": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "uncovered": { "type": "integer", "minimum": 0 },
+        "allowed": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 },
+        "error": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "elements", "files", "overlay", "uncovered"],
+        "properties": {
+          "name": { "type": "string" },
+          "elements": { "type": "integer", "minimum": 0 },
+          "files": { "type": "integer", "minimum": 0 },
+          "overlay": { "type": "boolean" },
+          "uncovered": { "description": "Uncovered dependencies (targets in no layer) whose source is in this layer.", "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "layerEdges": {
+      "description": "Dependencies per (source layer, target layer).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "allowed", "violations", "warnings", "skipped"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "allowed": { "type": "integer", "minimum": 0 },
+          "violations": { "type": "integer", "minimum": 0 },
+          "warnings": { "description": "Of the violations, those reported at warn (an advisory allowance, or an inferred edge under policy.inferred: warn).", "type": "integer", "minimum": 0 },
+          "skipped": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "configErrors": { "type": "array", "items": { "type": "string" } },
+    "selection": {
+      "description": "What mapx check evaluated and kept: the view and the --layer/--rule filters (null when not given). --compare refuses a base report with another view, or narrowed by a filter the head does not share.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view", "layer", "rule"],
+      "properties": {
+        "view": { "type": ["string", "null"] },
+        "layer": { "type": ["string", "null"] },
+        "rule": { "type": ["string", "null"] },
+        "since": { "description": "The ref of --since (M5-98-R1): only dependencies written in files changed since it. Absent when not given. --compare refuses a base report that has it.", "type": ["string", "null"] }
+      }
+    },
+    "policy": {
+      "description": "The resolved policy.uncovered of the configuration (M5-24-R4): whether dependencies on packages and on built-ins in no layer are reported as uncovered, and why for packages. Absent when the configuration cannot be loaded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uncovered"],
+      "properties": {
+        "uncovered": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["externals", "builtins"],
+          "properties": {
+            "externals": {
+              "description": "Packages: value, and source: explicit (policy.uncovered.externals set in file), package-selector (a non-overlay layer with a positive package selector, named in layer, opts in) or default (neither: packages are out of scope).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "source"],
+              "properties": {
+                "value": { "type": "boolean" },
+                "source": { "enum": ["explicit", "package-selector", "default"] },
+                "file": { "type": "string" },
+                "layer": { "type": "string" }
+              }
+            },
+            "builtins": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "end": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "file"],
+      "properties": {
+        "element": { "description": "A symbol's qualified name, a file's path, a Go package's import path, or an external's name (a package, or a built-in such as node:fs).", "type": "string" },
+        "file": { "description": "Workspace-relative file (a directory for a package); empty for an external target.", "type": "string" },
+        "layer": { "description": "Layers, comma-separated.", "type": "string" },
+        "layers": { "description": "The same layers as a list (a layer name may contain a comma).", "type": "array", "items": { "type": "string" } },
+        "repo": { "type": "string" },
+        "line": { "description": "First line of the dependency in the source file.", "type": "integer", "minimum": 1 },
+        "external": {
+          "description": "An external target (M5-24): what the scan attributed the reference outside the workspace to.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ecosystem", "origin", "package", "direct", "dev"],
+          "properties": {
+            "ecosystem": { "type": "string" },
+            "origin": { "enum": ["package", "builtin", "ambient"] },
+            "package": { "type": ["string", "null"] },
+            "direct": { "type": ["boolean", "null"] },
+            "dev": { "type": ["boolean", "null"] }
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "severity", "fingerprint", "message"],
+      "properties": {
+        "kind": { "enum": ["violation", "skipped", "uncovered", "allowed", "warning", "error"] },
+        "rule": { "description": "disallowed-layer, internal-element, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config, stale-baseline …", "type": "string" },
+        "severity": { "enum": ["error", "warn", "info"] },
+        "source": { "$ref": "#/definitions/end" },
+        "target": { "$ref": "#/definitions/end" },
+        "edgeType": { "type": "string" },
+        "verifiability": { "enum": ["verified", "inferred"] },
+        "layer": { "description": "For layer-level findings (empty-layer, plus-cycle, unsupported-selector).", "type": "string" },
+        "edges": { "description": "Stored edges this finding stands for.", "type": "integer", "minimum": 1 },
+        "fingerprint": { "description": "Stable identity: rule, both elements and the edge type, never a line number.", "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "identity": {
+          "description": "The fingerprint's inputs where they differ from the shown elements: a file-level end is its file path; an end outside the root repo names its repo (workspace-relative path).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "target"],
+          "properties": {
+            "source": { "type": "string" },
+            "target": { "type": "string" },
+            "sourceRepo": { "type": "string" },
+            "targetRepo": { "type": "string" }
+          }
+        },
+        "via": { "description": "An inherited dependency (policy.inheritDependencies): the inheritance path from the source type to the ancestor whose dependency it is, both included; past eight names, the first five and the last two around one \"… N more …\" entry.", "type": "array", "items": { "type": "string" }, "minItems": 2 },
+        "skippedBy": { "description": "Why a skipped finding is skipped: a baseline entry, or the base report of --compare.", "enum": ["baseline", "compare"] },
+        "location": {
+          "description": "Where to fix a finding that is not about code: a stale baseline entry is in the baseline file (workspace-relative, with /) at a JSON pointer.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {
+            "file": { "type": "string" },
+            "pointer": { "type": "string" }
+          }
+        },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

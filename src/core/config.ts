@@ -3,9 +3,58 @@ import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { MapxConfig, RepoConfig, UserLanguageDefinition } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
-import { getBuiltinLanguages } from '../languages/registry.js';
 
-const DEFAULT_CONFIG: MapxConfig = {
+/**
+ * Laravel noise excluded by default for `framework: laravel` repos (F10), relative to the repo root.
+ * Migrations, seeders, factories and views are indexed: they give edges for the `laravel` preset's
+ * Database and Views layers (M2-23), so they are no longer excluded by default (D043, M2-29).
+ */
+export const LARAVEL_DEFAULT_EXCLUDES = [
+  'storage/**',
+  'bootstrap/cache/**',
+  'public/**',
+  'vendor/**',
+];
+/** The defaults before D043 (M2-29) left out: an earlier `mapx init` may have written them into `excludePatterns`. */
+export const LARAVEL_FORMER_DEFAULT_EXCLUDES = [
+  'database/migrations/**',
+  'database/seeders/**',
+  'database/factories/**',
+  'resources/views/**',
+  '**/*.blade.php',
+];
+import { getBuiltinLanguages } from '../languages/registry.js';
+import { canonicalPath } from './workspace-manager.js';
+
+/** Excludes `mapx init` adds for a PHP project (composer.json or .php files at the root). */
+export const PHP_INIT_EXCLUDES = ['**/migrations/**', '**/seeds/**', '**/storage/**'];
+/** Excludes `mapx init` adds for a JavaScript/TypeScript project. */
+export const JS_INIT_EXCLUDES = ['**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx'];
+
+export interface CollapsedRepo {
+  dropped: RepoConfig;
+  kept: RepoConfig;
+}
+
+/** Removes repo entries whose folder (symlinks resolved) an earlier entry already names; returns them. */
+function collapseDuplicateRepos(config: MapxConfig, workspaceRoot: string): CollapsedRepo[] {
+  if (!Array.isArray(config.repos)) return [];
+  const byKey = new Map<string, RepoConfig>();
+  const collapsed: CollapsedRepo[] = [];
+  config.repos = config.repos.filter(repo => {
+    const key = canonicalPath(resolve(workspaceRoot, repo.path));
+    const kept = byKey.get(key);
+    if (kept) {
+      collapsed.push({ dropped: repo, kept });
+      return false;
+    }
+    byKey.set(key, repo);
+    return true;
+  });
+  return collapsed;
+}
+
+export const DEFAULT_CONFIG: MapxConfig = {
   version: '1.0.0',
   repos: [],
   languages: {},
@@ -33,6 +82,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       'build/**',
       '**/build/**',
       '*.min.js',
+      '*.min.css',
       'monaco/vs/**/*.js',
       'bootstrap-*/bootstrap.js',
       'bootstrap-*/bootstrap.min.js',
@@ -62,7 +112,6 @@ const DEFAULT_CONFIG: MapxConfig = {
       'Cargo.lock',
       'bun.lock',
       'AndroidManifest.xml',
-      'AndroidManifest.xml',
       '**/*.log',
       '**/*.lock',
       '**/*.tmp',
@@ -71,12 +120,15 @@ const DEFAULT_CONFIG: MapxConfig = {
       '**/*.DS_Store',
     ],
     includePatterns: [],
+    graphExcludePatterns: ['scratch/**', 'benchmarks/**', 'tests/**', '**/*.test.*', '**/*.spec.*'],
   },
 };
 
 export class Config {
   private configPath: string;
   private config: MapxConfig;
+  /** Entries `load` dropped because an earlier entry names the same folder (M0-10-R3). */
+  private collapsed: CollapsedRepo[] = [];
 
   private constructor(configPath: string, config: MapxConfig) {
     this.configPath = configPath;
@@ -102,7 +154,26 @@ export class Config {
 
     const data = await readFile(configPath, 'utf-8');
     const config = JSON.parse(data) as MapxConfig;
-    return new Config(configPath, config);
+    const loaded = new Config(configPath, config);
+    // Configs written before M0-10-R2's de-dup, or by hand, can name one folder twice (a symlink,
+    // another spelling): keep the first entry and save, so the folder is not indexed twice (M0-10-R3).
+    loaded.collapsed = collapseDuplicateRepos(config, workspaceRoot);
+    if (loaded.collapsed.length) await loaded.save();
+    return loaded;
+  }
+
+  /**
+   * Reads the configuration without changing anything (M4-22: the dashboard's config view is
+   * read-only): no default file is created, duplicate repo entries are reported in
+   * `collapsedRepos` but not saved away. Null when there is no config.json; throws on invalid JSON.
+   */
+  static async read(workspaceRoot: string): Promise<Config | null> {
+    const configPath = join(workspaceRoot, '.mapx', 'config.json');
+    if (!existsSync(configPath)) return null;
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as MapxConfig;
+    const loaded = new Config(configPath, config);
+    loaded.collapsed = collapseDuplicateRepos(config, workspaceRoot);
+    return loaded;
   }
 
   static async init(
@@ -129,17 +200,6 @@ export class Config {
     const defaultExclude = [...DEFAULT_CONFIG.settings.excludePatterns];
 
     if (shouldAddLaravelExcludes) {
-      const LARAVEL_DEFAULT_EXCLUDES = [
-        'database/migrations/**',
-        'database/seeders/**',
-        'database/factories/**',
-        'storage/**',
-        'bootstrap/cache/**',
-        'public/**',
-        'resources/views/**',
-        '**/*.blade.php',
-        'vendor/**',
-      ];
       for (const pattern of LARAVEL_DEFAULT_EXCLUDES) {
         if (!defaultExclude.includes(pattern)) {
           defaultExclude.push(pattern);
@@ -170,10 +230,12 @@ export class Config {
       }
 
       if (isPHP) {
-        defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
+        // A Laravel app that declined the suggested excludes keeps its migrations and seeders: they
+        // are indexed with their edges (M2-23). Only runtime storage is left out.
+        defaultExclude.push(...(isLaravel ? PHP_INIT_EXCLUDES.filter(p => p === '**/storage/**') : PHP_INIT_EXCLUDES));
       }
       if (isJSTS) {
-        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx');
+        defaultExclude.push(...JS_INIT_EXCLUDES);
       }
     }
 
@@ -183,6 +245,10 @@ export class Config {
     const userInclude = existing?.settings?.includePatterns ?? [];
     const mergedExclude = [...new Set([...userExclude, ...defaultExclude.filter(p => !userExclude.includes(p))])];
     const mergedInclude = [...new Set([...userInclude, ...DEFAULT_CONFIG.settings.includePatterns])];
+
+    const userGraphExclude = existing?.settings?.graphExcludePatterns ?? [];
+    const defaultGraphExclude = DEFAULT_CONFIG.settings.graphExcludePatterns ?? [];
+    const mergedGraphExclude = [...new Set([...userGraphExclude, ...defaultGraphExclude.filter(p => !userGraphExclude.includes(p))])];
 
     const defaultRepoName = repoName || resolve(workspaceRoot).split('/').pop() || 'default';
     // Keep existing repos; ensure there is at least the default entry
@@ -207,6 +273,11 @@ export class Config {
         maxTokenBudget: existing?.settings?.maxTokenBudget ?? DEFAULT_CONFIG.settings.maxTokenBudget,
         excludePatterns: mergedExclude,
         includePatterns: mergedInclude,
+        graphExcludePatterns: mergedGraphExclude,
+        // A declined suggestion is remembered, so scans don't re-apply the Laravel excludes (F10).
+        ...(isLaravel && !shouldAddLaravelExcludes ? { laravelDefaultExcludes: false } : {}),
+        ...(existing?.settings?.laravelDefaultExcludes !== undefined && !(isLaravel && !shouldAddLaravelExcludes)
+          ? { laravelDefaultExcludes: existing.settings.laravelDefaultExcludes } : {}),
       },
     };
 
@@ -252,14 +323,22 @@ export class Config {
     return result;
   }
 
-  addRepo(name: string, path: string): void {
-    if (!this.config.repos.find(r => r.path === path)) {
-      this.config.repos.push({ name, path });
-    }
+  /** Registers a repo unless its folder is already registered, under any spelling or symlink (M0-10-R2). */
+  addRepo(name: string, path: string): boolean {
+    const root = this.getWorkspaceRoot();
+    const key = canonicalPath(resolve(root, path));
+    if (this.config.repos.some(r => r.path === path || canonicalPath(resolve(root, r.path)) === key)) return false;
+    this.config.repos.push({ name, path });
+    return true;
   }
 
   removeRepo(nameOrPath: string): void {
     this.config.repos = this.config.repos.filter(r => r.name !== nameOrPath && r.path !== nameOrPath);
+  }
+
+  /** Duplicate entries the last `load` removed from the config file; the loaders report them. */
+  get collapsedRepos(): CollapsedRepo[] {
+    return this.collapsed;
   }
 
   getWorkspaceRoot(): string {

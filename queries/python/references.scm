@@ -4,9 +4,14 @@
 (import_statement
   [(dotted_name) (identifier)] @ref.target_import) @ref.type_import
 
+; aliased: import foo.bar as fb (M0-12-R4)
+(import_statement
+  (aliased_import name: (dotted_name) @ref.target_import)) @ref.type_import
+
 ; from ... import: from foo import bar
-(import_from_statement
-  [(dotted_name) (identifier)] @ref.target_import) @ref.type_import
+; The whole statement is the target: the resolver needs the module (with relative dots) and
+; the imported names to tell a submodule (from pkg import mod) from a name in pkg/__init__.py.
+((import_from_statement) @ref.target_import) @ref.type_import
 
 ; Class inheritance: class Foo(Base, Mixin)
 (class_definition
@@ -21,15 +26,18 @@
 
 ; Function calls: foo()
 (call
-  function: (identifier) @ref.target_call) @ref.type_call
+  function: (identifier) @ref.target_call
+  (#not-match? @ref.target_call "^[A-Z]")) @ref.type_call
+
+; Instantiation: Bar() — PEP 8 names classes in CapWords (M0-17-R1)
+(call
+  function: (identifier) @ref.target_instantiation
+  (#match? @ref.target_instantiation "^[A-Z]")) @ref.type_instantiation
 
 ; Method calls: obj.method()
 (call
   function: (attribute
     attribute: (identifier) @ref.target_call)) @ref.type_call
-
-; Instantiation: ClassName() — uppercase identifiers in call position
-; (handled as call — GenericWasmParser treats PascalCase calls as instantiation when needed)
 
 ; Decorator references: @decorator
 (decorator

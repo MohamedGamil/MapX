@@ -3,6 +3,28 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { RouteBinding, HookBinding } from '../types.js';
 
+/**
+ * A route as shown by `mapx routes --json` and `mapx_routes`: the binding plus normalised
+ * declaration line, name, middlewares and live-ness flags, present on every route.
+ */
+export function toRouteView(route: RouteBinding) {
+  const meta = route.metadata ?? {};
+  return {
+    ...route,
+    line: route.line ?? meta.line ?? null,
+    name: meta.name ?? null,
+    middlewares: route.middlewares ?? meta.middlewares ?? [],
+    // false only when no mount can load the route; `reachability` also tells "unknown" apart.
+    reachable: meta.reachable !== false,
+    reachability: meta.reachable === false ? 'unreachable' : meta.reachability === 'unknown' ? 'unknown' : 'reachable',
+    ...(meta.domain ? { domain: meta.domain } : {}),
+    overridden: meta.overridden === true,
+    ...(meta.overriddenBy ? { overriddenBy: meta.overriddenBy } : {}),
+    conditional: meta.conditional === true,
+    ...(meta.dynamic ? { dynamic: true } : {}),
+  };
+}
+
 export class RouteRegistry {
   private routes: RouteBinding[] = [];
   private hooks: HookBinding[] = [];
@@ -15,12 +37,20 @@ export class RouteRegistry {
     return this.hooks;
   }
 
+  /**
+   * Adds a route unless the same declaration is already there. The declaring file, line and load
+   * order are part of the identity, so a route and the later one that overrides it with the same
+   * handler are both kept.
+   */
   addRoute(route: RouteBinding): void {
+    const where = (r: RouteBinding) =>
+      `${r.metadata?.sourceFile ?? ''}:${r.line ?? r.metadata?.line ?? ''}:${Array.isArray(r.metadata?.order) ? r.metadata.order.join('.') : ''}`;
     const exists = this.routes.some(r =>
       r.method === route.method &&
       r.path === route.path &&
       r.handlerSymbol === route.handlerSymbol &&
-      r.handlerFile === route.handlerFile
+      r.handlerFile === route.handlerFile &&
+      where(r) === where(route)
     );
     if (!exists) {
       this.routes.push(route);

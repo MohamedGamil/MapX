@@ -1,0 +1,82 @@
+// M5-01 fixture: Go. Layers by package path.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    {
+      "name": "Controller",
+      "selectors": [
+        {
+          "path": "controller/**"
+        }
+      ]
+    },
+    {
+      "name": "Application",
+      "selectors": [
+        {
+          "path": "application/**"
+        }
+      ],
+      "private": [
+        {
+          "path": "application/appinternal/**"
+        }
+      ]
+    },
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "domain/**"
+        },
+        // M5-11: a module-root internal/ package the architecture assigns to Domain.
+        {
+          "path": "internal/ledger/**"
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "selectors": [
+        {
+          "path": "shared/**"
+        },
+        {
+          "path": "domain/ids/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "selectors": [
+        {
+          "path": "reporting/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Controller": [
+      "Application"
+    ],
+    "Application": [
+      "+Domain"
+    ],
+    "Domain": [
+      "Shared"
+    ],
+    "Infrastructure": [
+      "Domain",
+      "Shared"
+    ],
+    "Shared": []
+  }
+}

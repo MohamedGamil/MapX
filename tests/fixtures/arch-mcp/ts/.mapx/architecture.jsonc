@@ -1,0 +1,21 @@
+// M5-14 fixture (synthetic): the agent surface of the architecture rules (AR-19).
+// Expected, with these rules:
+//   PlaceOrder → SqlOrderRepository      disallowed-layer (Application → Infrastructure), error;
+//                                        alternative: Domain's OrderRepository, which it implements
+//   OrderController → Order              disallowed-layer (Controller → Domain), error
+//   OrderController → PlaceOrder         allowed
+//   SqlOrderRepository → OrderRepository allowed
+{
+  "layers": [
+    { "name": "Controller", "selectors": [{ "path": "src/controller/**" }] },
+    { "name": "Application", "selectors": [{ "path": "src/application/**" }] },
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infrastructure/**" }] }
+  ],
+  "rules": {
+    "Controller": ["Application"],
+    "Application": ["Domain"],
+    "Infrastructure": ["Domain"],
+    "Domain": []
+  }
+}

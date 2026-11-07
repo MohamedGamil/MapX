@@ -1,0 +1,43 @@
+// Synthetic fixture (M5-09): Domain may use Support, Support may use Http; with inheritDependencies, a Domain
+// subclass of a Support base answers for the base's Http dependency.
+{
+  "$schema": "../../../../../schemas/architecture.schema.json",
+  "policy": {
+    "inheritDependencies": true
+  },
+  "layers": [
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "app/Domain/**"
+        }
+      ]
+    },
+    {
+      "name": "Support",
+      "selectors": [
+        {
+          "path": "app/Support/**"
+        }
+      ]
+    },
+    {
+      "name": "Http",
+      "selectors": [
+        {
+          "path": "app/Http/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Domain": [
+      "Support"
+    ],
+    "Support": [
+      "Http"
+    ],
+    "Http": []
+  }
+}

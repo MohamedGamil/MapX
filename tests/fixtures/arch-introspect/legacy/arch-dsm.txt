@@ -1,0 +1,48 @@
+
+── Dependency Structure Matrix (DSM) ──────────────────
+                           C1   C2   C3   C4   C5   C6   C7   C8   C9  C10  C11  C12  C13  C14  C15  C16  C17  C18
+------------------------------------------------------------------------------------------------------------------
+C1 community_1              *    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .
+C2 community_2              .    *    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .
+C3 community_3              .    .    *    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .
+C4 community_4              .    .    .    *    .    .    .    .    .    .    .    .    .    .    .    .    .    .
+C5 community_5              .    .    .    .    *    .    .    .    .    .    .    .    .    .    .    .    .    .
+C6 layer:api                .    .    .    .    .    *    .    .    .    .    .    .    .    .    .    .    .    .
+C7 layer:data               .    .    .    .    .    .    *    .    .    .    .    .    .    .    .    .    .    .
+C8 layer:other              .    .    .    .    .    .    .    *    .    .    .    .    .    .    .    .    .    .
+C9 layer:service            .    .    .    .    .    .    .    .    *    .    .    .    .    .    .    .    .    .
+C10 layer:shared            .    .    .    .    .    .    .    .    .    *    .    .    .    .    .    .    .    .
+C11 src                     .    .    .    .    .    .    .    .    .    .    *    .    .    .    .    .    .    .
+C12 src.application         .    .    .    .    .    .    .    .    .    .    .    *    3    .    9    .    3    3
+C13 src.application.internal    .    .    .    .    .    .    .    .    .    .    .    .    *    .    .    .    .    .
+C14 src.controller          .    .    .    .    .    .    .    .    .    .    .    6    6    *    3    3    .    .
+C15 src.domain              .    .    .    .    .    .    .    .    .    .    .    .    .    .    *    3    3    .
+C16 src.infrastructure      .    .    .    .    .    .    .    .    .    .    .    .    .    .    6    *    .    3
+C17 src.shared              .    .    .    .    .    .    .    .    .    .    .    .    .    .    3    .    *    .
+C18 src.support             .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    .    *
+
+Legend:
+  * = self
+  . = no dependency
+  number = edge count from row cluster to column cluster
+
+Cluster Key:
+  C1: community_1
+  C2: community_2
+  C3: community_3
+  C4: community_4
+  C5: community_5
+  C6: layer:api
+  C7: layer:data
+  C8: layer:other
+  C9: layer:service
+  C10: layer:shared
+  C11: src
+  C12: src.application
+  C13: src.application.internal
+  C14: src.controller
+  C15: src.domain
+  C16: src.infrastructure
+  C17: src.shared
+  C18: src.support
+

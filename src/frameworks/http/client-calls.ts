@@ -1,0 +1,520 @@
+// Frontend HTTP call-site extraction (docs/baton M2-03, contract D008). Pure text analysis over
+// JS/TS/Vue sources: find HTTP clients (axios, fetch, axios.create instances, factories returning
+// one, aliases and configured receivers) and every call made through them.
+import { posix } from 'node:path';
+import { jsAliasTargets } from '../../core/js-aliases.js';
+
+export const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
+export const HTTP_SOURCE = /\.(m?[jt]sx?|cjs|vue|svelte)$/;
+/**
+ * Built or vendored bundles: compiled copies of the sources, not call sites of their own.
+ * `node_modules` and minified bundles always; `public/`, `dist/`, `build/` and `vendor/` only
+ * outside `src/` and `resources/`, where such a directory name is ordinary source (M2-06-R1).
+ */
+export function isHttpSkipped(path: string): boolean {
+  if (/(^|\/)node_modules\/|\.min\.[cm]?js$|\.bundle\.js$/.test(path)) return true;
+  for (const segment of path.split('/').slice(0, -1)) {
+    if (segment === 'src' || segment === 'resources') return false;
+    if (['public', 'dist', 'build', 'vendor'].includes(segment)) return true;
+  }
+  return false;
+}
+
+export interface HttpClientRef {
+  kind: 'axios' | 'fetch' | 'instance' | 'factory' | 'configured';
+  /** Receiver as written at the call site (e.g. `api`, `Api()`, `http`). */
+  name: string;
+  /** Raw `baseURL` expression of the client, evaluated later (M2-05). */
+  baseURL?: string;
+  /** Offset of the client's `axios.create` in its file, for scoped constant lookup (M2-04-R3); not persisted. */
+  baseURLAt?: number;
+  /** File that defines the client, when it is not the calling file. */
+  definedIn?: string;
+}
+export interface HttpCallSite {
+  file: string;
+  line: number;
+  method: string;
+  /** First argument exactly as written (minus surrounding whitespace). */
+  rawUrl: string;
+  client: HttpClientRef;
+  /** Offset of the call in the file, for scoped constant lookup (M2-04-R2); not persisted. */
+  offset?: number;
+}
+export interface HttpClientConfig {
+  receiver: string;
+  baseURL?: string;
+}
+interface Provider {
+  kind: 'instance' | 'factory';
+  baseURL?: string;
+  baseURLAt?: number;
+  definedIn: string;
+}
+export interface ProviderIndex {
+  named: Map<string, Map<string, Provider>>;
+  defaults: Map<string, Provider>;
+  /** Some file assigns `window.axios` (Laravel's bootstrap.js), making bare `axios` a client everywhere. */
+  globalAxios?: boolean;
+}
+
+const REGEX_PRECEDER = /[(,=:[!&|?{};+\-*%<>~^]$|(?:^|[^\w$])(?:return|typeof|case|in|of|delete|void|throw)$/;
+
+/**
+ * Same-length copy of JS source with comments and the bodies of string, template and regex
+ * literals replaced by spaces (newlines kept), so searches and bracket matching on it never see
+ * code inside comments or literals, while indices and line numbers still match the original.
+ */
+export function maskCode(text: string): string {
+  const out = text.split('');
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' ';
+  };
+  let lastSignificant = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === '/' && text[i + 1] === '/') {
+      const end = text.indexOf('\n', i);
+      blank(i, end < 0 ? text.length : end);
+      i = end < 0 ? text.length : end - 1;
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      blank(i, end < 0 ? text.length : end + 2);
+      i = end < 0 ? text.length : end + 1;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      const end = Math.min(skipString(text, i), text.length - 1);
+      blank(i + 1, end);
+      i = end;
+      lastSignificant = c;
+      continue;
+    }
+    // `</a>` and `/>` close JSX elements; they never start a regex literal (M2-06-R1).
+    if (c === '/' && text[i - 1] !== '<' && text[i + 1] !== '>' && REGEX_PRECEDER.test(text.slice(Math.max(0, i - 8), i).trimEnd() || '(')) {
+      let j = i + 1;
+      let inClass = false;
+      for (; j < text.length && text[j] !== '\n'; j++) {
+        if (text[j] === '\\') j++;
+        else if (text[j] === '[') inClass = true;
+        else if (text[j] === ']') inClass = false;
+        else if (text[j] === '/' && !inClass) break;
+      }
+      if (text[j] === '/') {
+        blank(i + 1, j);
+        i = j;
+        lastSignificant = '/';
+        continue;
+      }
+    }
+    if (!/\s/.test(c)) lastSignificant = c;
+  }
+  void lastSignificant;
+  return out.join('');
+}
+
+/** Masks a Vue/Svelte SFC so only its <script> blocks remain as code. */
+function maskComponent(text: string): string {
+  const out = text.replace(/[^\n]/g, ' ').split('');
+  // Attributes may hold `>` inside quotes (`<script setup generic="T extends Map<K, V>">`).
+  for (const m of text.matchAll(/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/gi)) {
+    const start = m.index! + m[1]!.length;
+    const masked = maskCode(m[2]!);
+    for (let k = 0; k < masked.length; k++) out[start + k] = masked[k]!;
+  }
+  return out.join('');
+}
+
+export function maskSource(file: string, text: string): string {
+  return /\.(vue|svelte)$/.test(file) ? maskComponent(text) : maskCode(text);
+}
+
+/** Index of the balanced closing bracket for the opener at `open`, skipping strings and templates. */
+export function matchBracket(text: string, open: number): number {
+  const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+  const stack: string[] = [];
+  for (let i = open; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "'" || c === '"' || c === '`') {
+      i = skipString(text, i);
+      continue;
+    }
+    if (pairs[c]) stack.push(pairs[c]!);
+    else if (c === stack[stack.length - 1]) {
+      stack.pop();
+      if (!stack.length) return i;
+    }
+  }
+  return -1;
+}
+
+function skipString(text: string, start: number): number {
+  const quote = text[start];
+  for (let i = start + 1; i < text.length; i++) {
+    const c = text[i];
+    if (c === '\\') i++;
+    else if (quote === '`' && c === '$' && text[i + 1] === '{') i = matchBracket(text, i + 1);
+    else if (c === quote) return i;
+    if (i < 0) return text.length;
+  }
+  return text.length;
+}
+
+/** Removes line and block comments outside string and template literals. */
+export function stripComments(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "'" || c === '"' || c === '`') {
+      const end = skipString(text, i);
+      out += text.slice(i, end + 1);
+      i = end;
+    } else if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      i = end < 0 ? text.length : end + 1;
+    } else if (c === '/' && text[i + 1] === '/') {
+      const end = text.indexOf('\n', i);
+      i = end < 0 ? text.length : end - 1;
+    } else out += c;
+  }
+  return out;
+}
+
+/** Closing bracket for the opener at `open`, counting brackets in masked source only. */
+function maskedClose(masked: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i]!;
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c) && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * Top-level comma-separated arguments of the call whose `(` is at `open`, without comments.
+ * Bounds and commas come from the masked source, so quotes inside comments or regex literals
+ * cannot derail them; the text comes from the original.
+ */
+export function callArguments(text: string, open: number, masked: string = maskCode(text)): string[] {
+  const close = maskedClose(masked, open);
+  if (close < 0) return [];
+  const args: string[] = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open + 1; i <= close; i++) {
+    const c = masked[i]!;
+    if (i < close && '([{'.includes(c)) depth++;
+    else if (i < close && ')]}'.includes(c)) depth--;
+    else if (i === close || (c === ',' && depth === 0)) {
+      const arg = stripComments(text.slice(start, i)).trim();
+      if (arg) args.push(arg);
+      start = i + 1;
+    }
+  }
+  return args;
+}
+
+/** Index just past the call's closing bracket, for checking what follows it. */
+export function callEnd(masked: string, open: number): number {
+  return maskedClose(masked, open) + 1;
+}
+
+/** Top-level entries of an object literal's body: `a: 1, b, ...c` → ['a: 1', 'b', '...c']. */
+function objectEntries(objectText: string): string[] {
+  return callArguments(`(${objectText})`, 0);
+}
+
+/**
+ * Raw value of a top-level property inside an options object such as `{ baseURL: X, timeout: 1 }`;
+ * the last one wins. Keys of nested objects (`body: JSON.stringify({ method: 'x' })`) do not count.
+ */
+export function objectProperty(objectText: string, key: string): string | undefined {
+  let value: string | undefined;
+  for (const entry of objectEntries(objectText)) {
+    const m = entry.match(new RegExp(`^(['"]?)${key}\\1\\s*:`));
+    if (m) value = entry.slice(m[0].length).trim();
+  }
+  return value;
+}
+
+/**
+ * Method of `fetch(url, init)` (M2-06-R1): GET without `init` or without a `method`; a literal
+ * top-level `method`; UNKNOWN when it comes from a variable, a shorthand, a spread or an init that
+ * is not an object literal.
+ */
+export function fetchMethod(init: string | undefined): string {
+  if (init === undefined) return 'GET';
+  if (!init.startsWith('{')) return 'UNKNOWN';
+  let method = 'GET';
+  for (const entry of objectEntries(init.slice(1, -1))) {
+    const m = entry.match(/^(['"]?)method\1\s*:\s*([\s\S]*)$/);
+    if (m) method = m[2]!.match(/^['"`](\w+)['"`]$/)?.[1]?.toUpperCase() ?? 'UNKNOWN';
+    else if (entry === 'method' || entry.startsWith('...')) method = 'UNKNOWN';
+  }
+  return method;
+}
+
+function createBaseURL(text: string, createAt: number, masked?: string): string | undefined {
+  const open = text.indexOf('(', createAt);
+  const options = callArguments(text, open, masked)[0];
+  return options?.startsWith('{') ? objectProperty(options.slice(1, -1), 'baseURL') : undefined;
+}
+
+/** Line lookup by binary search over newline offsets: linear setup, log-time queries. */
+function lineIndex(text: string): (index: number) => number {
+  const starts = [0];
+  for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) starts.push(i + 1);
+  return (index: number) => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
+  };
+}
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Exported clients: `export const http = axios.create(..)`, `export default () => axios.create(..)`, … */
+export function collectProviders(files: { path: string; content: string }[], readText?: ReadText): ProviderIndex {
+  const index: ProviderIndex = { named: new Map(), defaults: new Map() };
+  for (const { path, content } of files) {
+    if (/(?:window|globalThis)\.axios\s*=/.test(maskCode(content))) index.globalAxios = true;
+    if (!content.includes('axios')) continue;
+    const named = new Map<string, Provider>();
+    const add = (name: string | null, kind: Provider['kind'], at: number) => {
+      const provider = { kind, baseURL: createBaseURL(content, at), baseURLAt: at, definedIn: path };
+      if (name) named.set(name, provider);
+      else index.defaults.set(path, provider);
+    };
+    const patterns: [RegExp, Provider['kind'], boolean][] = [
+      [/export\s+(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g, 'instance', true],
+      [/export\s+(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*(?:\(\s*)?axios\.create\s*\(/g, 'factory', true],
+      [/export\s+function\s+(\w+)\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', true],
+      [/export\s+default\s+axios\.create\s*\(/g, 'instance', false],
+      [/export\s+default\s+(?:async\s*)?\([^)]*\)\s*=>\s*(?:\(\s*)?axios\.create\s*\(/g, 'factory', false],
+      [/export\s+default\s+function\s*\w*\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
+      // async functions and block-bodied arrows
+      [/export\s+(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', true],
+      [/export\s+(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', true],
+      [/export\s+default\s+(?:async\s+)?function\s*\w*\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
+      [/export\s+default\s+(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
+    ];
+    for (const [re, kind, hasName] of patterns)
+      for (const m of content.matchAll(re)) add(hasName ? m[1]! : null, kind, m.index! + m[0].lastIndexOf('axios.create'));
+    // `const x = axios.create(..); export default x` / `export { x }`
+    for (const m of content.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g)) {
+      const name = m[1]!;
+      if (new RegExp(`export\\s+default\\s+${name}\\b`).test(content)) add(null, 'instance', m.index! + m[0].lastIndexOf('axios.create'));
+      else if (new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}`).test(content)) add(name, 'instance', m.index! + m[0].lastIndexOf('axios.create'));
+    }
+    if (named.size) index.named.set(path, named);
+  }
+  // Re-exports: export { default as http, api } from './http'
+  const paths = new Set(files.map(f => f.path));
+  for (const { path, content } of files)
+    for (const m of content.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      const target = resolveImport(path, m[2]!, paths, readText);
+      if (!target) continue;
+      for (const item of m[1]!.split(',')) {
+        const [imported, exported] = item.trim().split(/\s+as\s+/);
+        if (!imported) continue;
+        const provider = imported === 'default' ? index.defaults.get(target) : index.named.get(target)?.get(imported);
+        if (!provider) continue;
+        const name = exported ?? imported;
+        if (name === 'default') index.defaults.set(path, provider);
+        else index.named.set(path, new Map([...(index.named.get(path) ?? []), [name, provider]]));
+      }
+    }
+  return index;
+}
+
+/** Reads a workspace-relative file (alias configs such as vite.config.js, tsconfig.json); null when absent. */
+export type ReadText = (path: string) => string | null;
+
+/**
+ * Resolves an import specifier to an indexed file: a relative path, or an alias through the
+ * shared resolver (M3-09: tsconfig/jsconfig `paths`, vite / vue-cli / webpack aliases, else `@/` →
+ * src/), which reads the alias configs with `readText` (M3-12).
+ */
+export function resolveImport(fromFile: string, spec: string, files: Set<string>, readText: ReadText = () => null): string | null {
+  const bases = spec.startsWith('.')
+    ? [posix.normalize(posix.join(posix.dirname(fromFile), spec))]
+    : jsAliasTargets(spec, fromFile, { files, readText });
+  for (const base of bases)
+    for (const ext of ['', '.ts', '.js', '.tsx', '.jsx', '.mjs', '.vue', '/index.ts', '/index.js'])
+      if (files.has(base + ext)) return base + ext;
+  return null;
+}
+
+interface Receiver {
+  pattern: string;
+  client: HttpClientRef;
+  /** Range the binding of a client created in this file is visible in (M2-04-R4). */
+  scope?: [number, number];
+}
+
+/**
+ * For each offset, the innermost `{…}` block around it in masked source, or the whole file at top
+ * level, in one pass. Null when the masked braces do not balance (JSX text such as `Don't` opens a
+ * string the masker never closes): block scopes cannot be trusted in that file.
+ */
+function blockScopes(masked: string, offsets: number[]): [number, number][] | null {
+  const queries = [...offsets].sort((a, b) => a - b);
+  const enclosing = new Map<number, number>();
+  const closeOf = new Map<number, number>();
+  const stack: number[] = [];
+  for (let i = 0, q = 0; i < masked.length; i++) {
+    for (; q < queries.length && queries[q] === i; q++) enclosing.set(i, stack[stack.length - 1] ?? -1);
+    if (masked[i] === '{') stack.push(i);
+    else if (masked[i] === '}') {
+      if (!stack.length) return null;
+      closeOf.set(stack.pop()!, i);
+    }
+  }
+  if (stack.length) return null;
+  return offsets.map((at) => {
+    const open = enclosing.get(at) ?? -1;
+    return open < 0 ? [0, masked.length] : [open, closeOf.get(open)!];
+  });
+}
+
+function receiversFor(file: string, content: string, masked: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[], readText?: ReadText): Receiver[] {
+  const receivers: Receiver[] = [];
+  // Bindings declared in this file (clients and factory aliases) with their declaration offsets.
+  const declared: [Receiver, number][] = [];
+  const own = (name: string, provider: Provider): HttpClientRef => ({
+    kind: provider.kind, name, baseURL: provider.baseURL, baseURLAt: provider.baseURLAt, ...(provider.definedIn !== file ? { definedIn: provider.definedIn } : {}),
+  });
+  const addProvider = (local: string, provider: Provider) => {
+    if (provider.kind === 'instance') receivers.push({ pattern: escape(local), client: own(local, provider) });
+    else {
+      receivers.push({ pattern: `${escape(local)}\\s*\\(\\s*\\)`, client: own(`${local}()`, provider) });
+      // Aliases: const api = Api(); scoped like the clients created in the file.
+      for (const m of masked.matchAll(new RegExp(`(?:const|let|var)\\s+(\\w+)\\s*=\\s*${escape(local)}\\s*\\(\\s*\\)`, 'g'))) {
+        const alias: Receiver = { pattern: escape(m[1]!), client: { ...own(m[1]!, provider), kind: 'factory' } };
+        receivers.push(alias);
+        declared.push([alias, m.index!]);
+      }
+    }
+  };
+  for (const m of content.matchAll(/import\s+\*\s+as\s+(\w+)\s+from\s*['"]axios['"]/g))
+    receivers.push({ pattern: escape(m[1]!), client: { kind: 'axios', name: m[1]! } });
+  for (const m of content.matchAll(/import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"]([^'"]+)['"]/g)) {
+    const [, def, namedList, spec] = m;
+    if (spec === 'axios') {
+      if (def) receivers.push({ pattern: escape(def), client: { kind: 'axios', name: def } });
+      continue;
+    }
+    const target = resolveImport(file, spec!, files, readText);
+    if (!target) continue;
+    if (def && providers.defaults.has(target)) addProvider(def, providers.defaults.get(target)!);
+    for (const item of (namedList ?? '').split(',')) {
+      const [imported, local] = item.trim().split(/\s+as\s+/);
+      const provider = imported ? providers.named.get(target)?.get(imported) : undefined;
+      if (provider) addProvider(local ?? imported!, provider);
+    }
+  }
+  // CommonJS: const axios = require('axios')
+  for (const m of content.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*require\s*\(\s*['"]axios['"]\s*\)/g))
+    receivers.push({ pattern: escape(m[1]!), client: { kind: 'axios', name: m[1]! } });
+  // A global window.axios (Laravel's bootstrap.js) makes bare `axios` a client in every file.
+  if (providers.globalAxios && !receivers.some(r => r.client.kind === 'axios'))
+    receivers.push({ pattern: '(?:window\\.|globalThis\\.)?axios', client: { kind: 'axios', name: 'axios' } });
+  // Clients created in this file; declarations in comments and strings do not count.
+  for (const m of masked.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g)) {
+    const at = m.index! + m[0].lastIndexOf('axios.create');
+    const client: Receiver = { pattern: escape(m[1]!), client: { kind: 'instance', name: m[1]!, baseURL: createBaseURL(content, at, masked), baseURLAt: at } };
+    receivers.push(client);
+    declared.push([client, m.index!]);
+  }
+  for (const [name, provider] of providers.named.get(file) ?? []) addProvider(name, provider);
+  // Each declared binding is visible in the block of its declaration (M2-04-R4).
+  const scopes = blockScopes(masked, declared.map(([, at]) => at));
+  if (scopes) declared.forEach(([r], i) => (r.scope = scopes[i]));
+  for (const c of configured)
+    if (new RegExp(`(?<![\\w.$])${escape(c.receiver)}\\s*\\.`).test(content))
+      receivers.push({ pattern: escape(c.receiver), client: { kind: 'configured', name: c.receiver, ...(c.baseURL !== undefined ? { baseURL: `'${c.baseURL}'` } : {}) } });
+  return receivers;
+}
+
+/**
+ * A URL argument as the requests it can make: each branch of a top-level `cond ? a : b`
+ * (recursively), otherwise the argument itself.
+ */
+export function urlBranches(arg: string): string[] {
+  let depth = 0;
+  let question = -1;
+  let pending = 0; // nested `?` inside the consequent awaiting their `:`
+  for (let i = 0; i < arg.length; i++) {
+    const c = arg[i]!;
+    if (c === "'" || c === '"' || c === '`') i = skipString(arg, i);
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (depth === 0 && c === '?' && arg[i + 1] !== '.' && arg[i + 1] !== '?' && arg[i - 1] !== '?') {
+      if (question < 0) question = i;
+      else pending++;
+    } else if (depth === 0 && c === ':' && question >= 0) {
+      if (pending > 0) pending--;
+      else return [...urlBranches(arg.slice(question + 1, i).trim()), ...urlBranches(arg.slice(i + 1).trim())];
+    }
+  }
+  return [arg];
+}
+
+/** Every HTTP call site in one JS/TS/Vue file. */
+export function extractHttpCalls(
+  file: string,
+  content: string,
+  ctx: { providers: ProviderIndex; files: Set<string>; clients?: HttpClientConfig[]; readText?: ReadText },
+): HttpCallSite[] {
+  const calls: HttpCallSite[] = [];
+  const seen = new Set<number>();
+  const methods = HTTP_METHODS.join('|');
+  // Search the masked source: calls in comments, strings or SFC templates are not calls.
+  const masked = maskSource(file, content);
+  const lineAt = lineIndex(content);
+  // Receivers by pattern, in order of first appearance, so each pattern is searched once.
+  const byPattern = new Map<string, Receiver[]>();
+  for (const r of receiversFor(file, content, masked, ctx.providers, ctx.files, ctx.clients ?? [], ctx.readText)) {
+    if (!byPattern.has(r.pattern)) byPattern.set(r.pattern, []);
+    byPattern.get(r.pattern)!.push(r);
+  }
+  // Same-named receivers (`const api = axios.create(..)` in two functions): a call belongs to the
+  // innermost binding whose block contains it; else to an unscoped one (an import), else the first (M2-04-R4).
+  const owner = (same: Receiver[], offset: number): Receiver => {
+    let best: Receiver | undefined;
+    for (const o of same)
+      if (o.scope && o.scope[0] <= offset && offset <= o.scope[1] && (!best || o.scope[1] - o.scope[0] < best.scope![1] - best.scope![0])) best = o;
+    return best ?? same.find(o => !o.scope) ?? same[0]!;
+  };
+  for (const [pattern, same] of byPattern) {
+    const re = new RegExp(`(?<![\\w.$])${pattern}\\s*\\.\\s*(${methods})\\s*\\(`, 'g');
+    for (const m of masked.matchAll(re)) {
+      if (seen.has(m.index!)) continue;
+      const args = callArguments(content, m.index! + m[0].length - 1, masked);
+      if (!args[0]) continue;
+      seen.add(m.index!);
+      const { client } = owner(same, m.index!);
+      for (const rawUrl of urlBranches(args[0]))
+        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client, offset: m.index! });
+    }
+  }
+  for (const m of masked.matchAll(/(?<![\w.$])(?:window\.|globalThis\.)?fetch\s*\(/g)) {
+    const open = m.index! + m[0].length - 1;
+    // `function fetch(url) {`, `async fetch(id) {` and `fetch(x) {` methods are definitions.
+    if (/(?:function|async|get|set)\s+$/.test(masked.slice(Math.max(0, m.index! - 12), m.index!))) continue;
+    if (/^\s*(?:\{|=>|:\s*[\w<]+[^;{]*\{)/.test(masked.slice(callEnd(masked, open), callEnd(masked, open) + 80))) continue;
+    const args = callArguments(content, open, masked);
+    if (!args[0]) continue;
+    const method = fetchMethod(args[1]);
+    for (const rawUrl of urlBranches(args[0]))
+      calls.push({ file, line: lineAt(m.index!), method, rawUrl, client: { kind: 'fetch', name: 'fetch' }, offset: m.index! });
+  }
+  return calls.sort((a, b) => a.line - b.line);
+}

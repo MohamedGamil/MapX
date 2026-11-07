@@ -1,24 +1,14 @@
 ; PHP Reference / Dependency Extraction
 
-(require_once_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
+; The whole path expression ("x.php", ('x.php'), __DIR__ . '/x.php'); php.ts evaluates it (M0-04-R5).
+(require_once_expression (_) @ref.target_require) @ref.type_require
+(require_expression (_) @ref.target_require) @ref.type_require
+(include_once_expression (_) @ref.target_require) @ref.type_require
+(include_expression (_) @ref.target_require) @ref.type_require
 
-(require_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
-
-(include_once_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
-
-(include_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
+; Function calls: helper(), \App\fmt(), Sub\fmt(), namespace\fmt(); not $callable() (M0-04-R5)
+(function_call_expression
+  function: [(name) (qualified_name) (relative_name)] @ref.target_function_call) @ref.type_function_call
 
 ; F05: Namespace use clauses
 (namespace_use_clause) @ref.target_use_clause
@@ -26,19 +16,37 @@
 ; Inheritance
 (class_declaration
   (base_clause
-    (name) @ref.target_extends)) @ref.type_extends
+    [(name) (qualified_name)] @ref.target_extends)) @ref.type_extends
 
 (class_declaration
   (class_interface_clause
-    (name) @ref.target_implements)) @ref.type_implements
+    [(name) (qualified_name)] @ref.target_implements)) @ref.type_implements
+
+; An interface's parents: `interface Billable extends Payable, Countable` (M5-09).
+(interface_declaration
+  (base_clause
+    [(name) (qualified_name)] @ref.target_extends)) @ref.type_extends
 
 ; Instantiation
 (object_creation_expression
-  (name) @ref.target_instantiation) @ref.type_instantiation
+  [(name) (qualified_name)] @ref.target_instantiation) @ref.type_instantiation
 
 ; Scoped calls
 (scoped_call_expression
-  scope: (name) @ref.target_call) @ref.type_call
+  scope: [(name) (qualified_name)] @ref.target_call) @ref.type_call
+
+; `self::m()`, `static::m()`, `parent::m()`: the method of the class around the call, or of its
+; parent; php.ts reads the class from the syntax tree (M2-16). `self::$f()`, `self::K` and
+; `self::class` are not calls and do not match.
+(scoped_call_expression
+  scope: (relative_scope)
+  name: (name) @ref.target_self_call) @ref.type_self_call
+
+; `X::class`: php.ts reads it in migrations, seeders, factories and Blade views, where a class named
+; by its constant is the dependency (`$this->call(UserSeeder::class)`, `$model = User::class`) (M2-23).
+(class_constant_access_expression
+  . [(name) (qualified_name)] @ref.target_class_constant
+  . (name) @_class_const (#eq? @_class_const "class")) @ref.type_class_constant
 
 ; Member calls
 (member_call_expression
@@ -78,16 +86,16 @@
   arguments: (arguments) @ref.binding_arguments
 ) @ref.type_binding_call
 
-; F12: Event, Job, and Notification dispatch
+; F12: Event, Job, and Notification dispatch; qualified names too: event(new \App\X), \Event::dispatch (M0-04-R2)
 (function_call_expression
   function: (name) @_fn (#match? @_fn "^(event|dispatch|dispatch_sync)$")
   arguments: (arguments
     (argument
       (object_creation_expression
-        (name) @ref.target_dispatch)))) @ref.type_dispatch
+        [(name) (qualified_name)] @ref.target_dispatch)))) @ref.type_dispatch
 
 (scoped_call_expression
-  scope: (name) @ref.target_dispatch_static
+  scope: [(name) (qualified_name)] @ref.target_dispatch_static
   name: (name) @_dispatch_method (#match? @_dispatch_method "^(dispatch|dispatchSync|dispatchIf|dispatchUnless|dispatchAfterResponse)$")
 ) @ref.type_dispatch_static_call
 
@@ -96,7 +104,7 @@
   arguments: (arguments
     (argument
       (object_creation_expression
-        (name) @ref.target_notify)))) @ref.type_notify
+        [(name) (qualified_name)] @ref.target_notify)))) @ref.type_notify
 
 (scoped_call_expression
   scope: (name) @_notif_facade (#eq? @_notif_facade "Notification")
@@ -105,5 +113,5 @@
     (argument)
     (argument
       (object_creation_expression
-        (name) @ref.target_notify)))) @ref.type_notify_facade
+        [(name) (qualified_name)] @ref.target_notify)))) @ref.type_notify_facade
 

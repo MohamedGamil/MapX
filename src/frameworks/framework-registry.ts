@@ -1,4 +1,6 @@
+import { relative } from 'node:path';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../types.js';
+import { findNestedManifestScopes, type ManifestCache } from './utils.js';
 import { LaravelDetector } from './detectors/laravel.js';
 import { DjangoDetector } from './detectors/django.js';
 import { FlaskDetector } from './detectors/flask.js';
@@ -20,6 +22,7 @@ import { VaporDetector } from './detectors/vapor.js';
 import { SymfonyDetector } from './detectors/symfony.js';
 import { YiiDetector } from './detectors/yii.js';
 import { WordPressDetector } from './detectors/wordpress.js';
+import { FlutterDetector } from './detectors/flutter.js';
 
 export class FrameworkRegistry {
   private static instance: FrameworkRegistry | null = null;
@@ -47,6 +50,7 @@ export class FrameworkRegistry {
     this.register(new SymfonyDetector());
     this.register(new YiiDetector());
     this.register(new WordPressDetector());
+    this.register(new FlutterDetector());
   }
 
   static getInstance(): FrameworkRegistry {
@@ -64,13 +68,38 @@ export class FrameworkRegistry {
     return this.detectors;
   }
 
-  async detectActiveFrameworks(projectRoot: string, files: string[]): Promise<FrameworkDetector[]> {
+  /**
+   * Detectors active for the repo at `projectRoot`. `detect()` activates a detector for the whole
+   * repo; failing that, a manifest below the repo root listing one of its `manifestDependencies`
+   * activates it for that folder only, and `options.scopes` receives those folders
+   * (workspace-relative, like `files`, which are relative to `options.workspaceRoot`). A detector
+   * missing from `scopes` is active for the whole repo (M3-07). `only` limits the question to the named
+   * detectors (sync asks it of the ones with an ignore list, M0-02-R13). The manifest helpers `detect()`
+   * uses read only the repo root's manifest, even when `files` holds nested ones (M3-07-R1).
+   */
+  async detectActiveFrameworks(
+    projectRoot: string,
+    files: string[],
+    options: { workspaceRoot?: string; scopes?: Map<string, string[]>; only?: string[] } = {},
+  ): Promise<FrameworkDetector[]> {
     const active: FrameworkDetector[] = [];
+    const workspaceRoot = options.workspaceRoot ?? projectRoot;
+    const repoPrefix = relative(workspaceRoot, projectRoot).replace(/\\/g, '/');
+    const manifests: ManifestCache = new Map();
     for (const detector of this.detectors) {
+      if (options.only && !options.only.includes(detector.name)) continue;
       try {
         const isDetected = await detector.detect(projectRoot, files);
         if (isDetected) {
           active.push(detector);
+          continue;
+        }
+        const deps = detector.manifestDependencies;
+        if (!deps) continue;
+        const scopes = await findNestedManifestScopes(workspaceRoot, repoPrefix, files, deps.manifest, deps.names, manifests);
+        if (scopes.length > 0) {
+          active.push(detector);
+          options.scopes?.set(detector.name, scopes);
         }
       } catch (err) {
         console.error(`Error detecting framework ${detector.name}:`, err);

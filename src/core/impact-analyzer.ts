@@ -107,31 +107,10 @@ export class ImpactAnalyzer {
           /\/tests\//i.test(edge.source_file) ||
           /__tests__/.test(edge.source_file);
 
-        if (isTestFile) {
-          risk = 'LOW';
-        } else if (risk !== 'LOW') {
-          // Check if call is within a try/catch block
-          let hasTryCatch = false;
-          try {
-            let callerStartLine = 1;
-            if (edge.source_symbol) {
-              const symInfo = this.store.getSymbolByName(edge.source_symbol);
-              if (symInfo) {
-                callerStartLine = symInfo.start_line as number;
-              }
-            }
-            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
-            const callLine = meta.startLine || 1;
-            const absolutePath = resolve(dir, edge.source_file);
-            const content = readFileSync(absolutePath, 'utf8');
-            const isPython = edge.source_file.endsWith('.py');
-            hasTryCatch = checkTryCatch(content, callLine, callerStartLine, isPython);
-          } catch {}
-
-          if (hasTryCatch) {
-            risk = 'LOW';
-          }
-        }
+        // Risk depends on depth and test files only (F19, D010). A try/catch around the call
+        // used to downgrade HIGH to LOW, but a caught exception still lets behaviour changes
+        // propagate, and the line-based check also matched `try` in comments.
+        if (isTestFile) risk = 'LOW';
 
         items.push({
           symbol: callerName,
@@ -144,6 +123,40 @@ export class ImpactAnalyzer {
         if (edge.source_symbol) {
           queue.push({ symName: edge.source_symbol, depth: curDepth });
         }
+      }
+    }
+
+    // Files that only import the symbol's file (no call edge) are affected too, at LOW risk, but only
+    // when they import the symbol itself (M0-11-R2). Import edges name the module, not the imported
+    // names, so the importer's source must mention the symbol's short name as a whole word.
+    const target = this.store.getSymbolByName(symbolName);
+    if (target?.file_path) {
+      const seenFiles = new Set(items.map(x => x.file));
+      const importers = this.store.raw
+        .prepare("SELECT source_file, target_symbol FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
+        .all(target.file_path, target.file_path) as { source_file: string; target_symbol: string | null }[];
+      // The declared name: the last segment of `A::m`, or the whole of a name such as `'api.get'` (M4-26).
+      const short = (target.name as string) || symbolName.split(/::|\.|\\/).pop() || symbolName;
+      const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const mentions = new RegExp(`(^|[^\\w$])${escape(short)}($|[^\\w$])`);
+      // A default export is imported under any name (`import fmt from './format'`) (M0-11-R3).
+      const defaultExport = this.isDefaultExport(dir, target.file_path as string, short);
+      const specifiers = new Map<string, string[]>();
+      for (const { source_file, target_symbol } of importers) {
+        specifiers.set(source_file, [...(specifiers.get(source_file) ?? []), ...(target_symbol ? [target_symbol] : [])]);
+      }
+      for (const [source_file, specs] of specifiers) {
+        if (seenFiles.has(source_file)) continue;
+        let source: string | null = null;
+        try {
+          source = readFileSync(resolve(dir, source_file), 'utf-8');
+        } catch {
+          // unreadable: keep the file-level answer
+        }
+        const importsDefault = defaultExport && source !== null && specs.some(spec =>
+          new RegExp(`\\bimport\\s+[A-Za-z_$][\\w$]*\\s*(?:,\\s*(?:\\{[^}]*\\}|\\*\\s*as\\s+[\\w$]+)\\s*)?from\\s*['"]${escape(spec)}['"]`).test(source!));
+        if (source !== null && !mentions.test(source) && !importsDefault) continue;
+        items.push({ symbol: '<import>', file: source_file, depth: 1, edgeType: 'import', risk: 'LOW' });
       }
     }
 
@@ -163,5 +176,19 @@ export class ImpactAnalyzer {
       },
       recommendation
     };
+  }
+
+  /** Whether the file exports `name` as its default export (`export default function name`, `export { name as default }`). */
+  private isDefaultExport(dir: string, file: string, name: string): boolean {
+    let text: string;
+    try {
+      text = readFileSync(resolve(dir, file), 'utf-8');
+    } catch {
+      return false;
+    }
+    const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\bexport\\s+default\\s+(?:abstract\\s+)?(?:async\\s+)?(?:function\\s*\\*?\\s*|class\\s+)${n}\\b`).test(text)
+      || new RegExp(`\\bexport\\s+default\\s+${n}\\s*;?\\s*$`, 'm').test(text)
+      || new RegExp(`\\bexport\\s*\\{[^}]*\\b${n}\\s+as\\s+default\\b`).test(text);
   }
 }

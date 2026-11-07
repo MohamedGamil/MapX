@@ -1,0 +1,3 @@
+#!/usr/bin/env php
+<?php
+// M2-06-R4: a synthetic second Laravel app whose only host evidence is a Route::domain().

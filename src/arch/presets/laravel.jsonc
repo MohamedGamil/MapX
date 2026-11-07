@@ -1,0 +1,78 @@
+// mapx:preset/laravel: a Laravel application.
+// AR-15. By Laravel's folder conventions, the framework parts MapX detects (route handlers,
+// middleware, Eloquent models with relations) and the framework's base types (M5-17-R1): a class
+// that extends Eloquent's Model, implements ShouldQueue or extends a controller base is placed by
+// its ancestry wherever it lives, and the folders stay the fallback for classes without one. Idiomatic Laravel 11 passes it: route closures with
+// route-model binding, invokable actions routed directly, the scheduler in routes/console.php,
+// listeners that type-hint their event, a model dispatching a job from booted(), the default User
+// model naming its factory. Models never depend on Http; Jobs, Listeners and Providers never on Http
+// either.
+// Parameter: root, the folder holding the application ("" when artisan is at the repo root).
+{
+  "parameters": { "root": "" },
+  "layers": [
+    // Route files (web, api, channels): they name controllers or invokable actions, and their
+    // closures bind models. routes/console.php is the scheduler: it is in Console.
+    { "name": "Routes", "selectors": [{ "all": [{ "path": "%root%routes/**" }, { "not": { "path": "%root%routes/console.php" } }] }] },
+    // Controllers, middleware, form requests and resources, and any other class a route or
+    // middleware edge targets (module controllers). Route files, whose closures are route handlers
+    // too, stay in Routes, and routed actions stay in Services. A class extending a controller base
+    // (the app's Controller, or Illuminate's before Laravel 11) is in Http wherever it is.
+    { "name": "Http", "selectors": [
+      { "path": "%root%app/Http/**" },
+      { "extends": "App\\Http\\Controllers\\Controller" },
+      { "extends": "Illuminate\\Routing\\Controller" },
+      { "all": [{ "framework": "route-handler" }, { "not": { "any": [{ "path": "%root%routes/**" }, { "path": "%root%app/{Services,Actions,Domain}/**" }] } }] },
+      { "framework": "middleware" }
+    ] },
+    // Artisan commands, and the schedule and closure commands of routes/console.php.
+    { "name": "Console", "selectors": [{ "path": "%root%app/Console/**" }, { "path": "%root%routes/console.php" }] },
+    // Service providers: the container's wiring.
+    { "name": "Providers", "selectors": [{ "path": "%root%app/Providers/**" }] },
+    // Jobs, and any class that implements ShouldQueue outside the folders whose classes queue for
+    // their own reasons (queued listeners, mail and notifications).
+    { "name": "Jobs", "selectors": [
+      { "path": "%root%app/Jobs/**" },
+      { "all": [{ "implements": "Illuminate\\Contracts\\Queue\\ShouldQueue" }, { "not": { "path": "%root%app/{Listeners,Mail,Notifications}/**" } }] }
+    ] },
+    // Events and their listeners.
+    { "name": "Events", "selectors": [{ "path": "%root%app/Events/**" }] },
+    { "name": "Listeners", "selectors": [{ "path": "%root%app/Listeners/**" }] },
+    // Domain logic outside the framework: services, actions (invokable ones may be routed), a domain
+    // folder. An Eloquent model there is in Models only.
+    { "name": "Services", "selectors": [{ "all": [
+      { "path": "%root%app/{Services,Actions,Domain}/**" },
+      { "not": { "any": [
+        { "extends": "Illuminate\\Database\\Eloquent\\Model" },
+        { "extends": "Illuminate\\Foundation\\Auth\\User" },
+        { "extends": "Illuminate\\Database\\Eloquent\\Relations\\Pivot" }
+      ] } }
+    ] }] },
+    // Eloquent models: by folder, by ancestry (Model, the Authenticatable user, Pivot), and any class
+    // with relation edges.
+    { "name": "Models", "selectors": [
+      { "path": "%root%app/Models/**" },
+      { "extends": "Illuminate\\Database\\Eloquent\\Model" },
+      { "extends": "Illuminate\\Foundation\\Auth\\User" },
+      { "extends": "Illuminate\\Database\\Eloquent\\Relations\\Pivot" },
+      { "framework": "model" }
+    ] },
+    // Blade views.
+    { "name": "Views", "selectors": [{ "path": "%root%resources/views/**" }] },
+    // Migrations, factories and seeders.
+    { "name": "Database", "selectors": [{ "path": "%root%database/**" }] }
+  ],
+  "rules": {
+    "Routes": ["Http", "Services", "Models"],
+    "Http": ["Services", "Models", "Jobs", "Events", "Views"],
+    "Console": ["Services", "Models", "Jobs", "Events"],
+    "Providers": ["Services", "Models", "Jobs", "Events", "Listeners"],
+    "Jobs": ["Services", "Models", "Events"],
+    "Listeners": ["Events", "Services", "Models", "Jobs"],
+    "Events": ["Models"],
+    "Services": ["Models", "Jobs", "Events"],
+    "Models": ["Events", "Jobs", "Database"],
+    "Views": ["Models"],
+    "Database": ["Models"]
+  }
+}

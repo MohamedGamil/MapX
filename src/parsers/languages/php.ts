@@ -4,6 +4,9 @@ import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 import { GenericWasmParser } from '../generic-wasm-parser.js';
+import { symbolAnnotations } from '../annotations.js';
+import { ambientAccesses } from '../ambient.js';
+import { bladeToPhp } from './blade.js';
 
 export const LARAVEL_FACADE_MAP: Record<string, string> = {
   App:           'Illuminate\\Foundation\\Application',
@@ -38,16 +41,60 @@ export const LARAVEL_FACADE_MAP: Record<string, string> = {
   View:          'Illuminate\\View\\Factory',
 };
 
+const PHP_NAMESPACED_KINDS = new Set(['class', 'interface', 'trait', 'enum', 'function']);
+const PHP_TYPE_DECLARATIONS = new Set(['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration']);
+
+/** The class, interface, trait or enum declaration a node sits in, or null. */
+function phpEnclosingType(node: any): any {
+  for (let p = node.parent; p; p = p.parent) if (PHP_TYPE_DECLARATIONS.has(p.type)) return p;
+  return null;
+}
+
+/**
+ * The adaptation rules of a `use A, B { … }` block: `B::x insteadof A, C` (`insteadof`: the method,
+ * and its winning trait) and `A::x as [visibility] ax` / `x as ax`
+ * (`aliases`: the new name, the trait method it names, the trait when written). A rule that only
+ * changes visibility (`x as protected`) is dropped; null when there are none.
+ */
+function phpTraitRules(useLists: any[], qualify: (name: string) => string): { insteadof?: Array<{ method: string; winner: string }>; aliases?: Array<{ alias: string; method: string; trait?: string }> } | null {
+  const insteadof: Array<{ method: string; winner: string }> = [];
+  const aliases: Array<{ alias: string; method: string; trait?: string }> = [];
+  for (const list of useLists) {
+    for (const clause of list.namedChildren) {
+      const [first, ...rest] = clause.namedChildren.filter((c: any) => c.type !== 'comment');
+      if (!first) continue;
+      // `Trait::method` or a bare `method`.
+      const qualified = first.type === 'class_constant_access_expression';
+      const method = qualified ? first.namedChildren.at(-1)?.text : first.text;
+      const trait = qualified ? first.namedChildren[0]?.text : undefined;
+      if (!method) continue;
+      if (clause.type === 'use_instead_of_clause' && trait) {
+        insteadof.push({ method, winner: qualify(trait) });
+      } else if (clause.type === 'use_as_clause') {
+        const alias = rest.filter((c: any) => c.type === 'name').at(-1)?.text;
+        if (alias) aliases.push({ alias, method, ...(trait ? { trait: qualify(trait) } : {}) });
+      }
+    }
+  }
+  return insteadof.length || aliases.length ? { ...(insteadof.length ? { insteadof } : {}), ...(aliases.length ? { aliases } : {}) } : null;
+}
+
 export class PhpParser extends GenericWasmParser {
   constructor(langDef: LanguageDefinition) {
     super(langDef);
   }
 
-  async parse(filePath: string, source: string, options?: any): Promise<ParseResult> {
+  async parse(filePath: string, rawSource: string, options?: any): Promise<ParseResult> {
     // F10: Noise Reduction / Exclusions
-    if (filePath.includes('bootstrap/cache/') || filePath.endsWith('.blade.php')) {
+    if (filePath.includes('bootstrap/cache/')) {
       return { symbols: [], references: [], errors: [] };
     }
+    // A Blade view is read through its PHP: `@php` blocks, echoes, `@use` and `@inject`, with the
+    // lines of the file (M2-23).
+    const isBlade = filePath.endsWith('.blade.php');
+    const source = isBlade ? bladeToPhp(rawSource) : rawSource;
+    // Any view, Blade or plain PHP, names classes but not the type of the variables it is handed.
+    const isView = isBlade || /(^|[\\/])resources[\\/]views[\\/]/.test(filePath);
 
     await this.ensureLoaded();
     const errors: ParseResult['errors'] = [];
@@ -55,13 +102,19 @@ export class PhpParser extends GenericWasmParser {
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
     let fileMetadata: Record<string, any> | undefined = undefined;
+    let ambient: ParseResult['ambient'];
 
+    let parsed: Awaited<ReturnType<typeof parseWithQueries>> | undefined;
     try {
-      const { symbols: symCaptures, references: refCaptures, nameByNodeId } = await parseWithQueries(
-        source, this.language, this.symbolsQuery!, this.referencesQuery!
+      parsed = await parseWithQueries(
+        source, this.language, this.symbolsQuery!, this.referencesQuery!,
+        // Superglobals and getenv() (M5-24-R1).
+        (root) => { ambient = ambientAccesses('php', root, source); },
       );
+      const { symbols: symCaptures, references: refCaptures, nameByNodeId } = parsed;
 
-      let currentClass: string | null = null;
+      // Each symbol's declaration node, for its attributes and PHPDoc tags once `use` is read (M5-10).
+      const declarations: Array<[ExtractedSymbol, any]> = [];
 
       for (const [captureName, captures] of symCaptures) {
         if (captureName.startsWith('symbol.kind_')) {
@@ -77,33 +130,53 @@ export class PhpParser extends GenericWasmParser {
               continue;
             }
 
-            if (kind === 'class' || kind === 'interface' || kind === 'trait' || kind === 'enum') {
-              currentClass = name;
-            }
-
             let signature = name;
             const parentNode = capture.node.parent;
             if (parentNode) {
               signature = this.extractSignature(source, parentNode, name, kind, startLine);
             }
 
-            symbols.push({
+            const symbol: ExtractedSymbol = {
               name,
               kind,
+              // The type the member is declared in, from the syntax tree: captures come grouped by kind,
+              // so the last class read is not the member's in a file of several (M2-12 review).
               scope: kind === 'method' || kind === 'property' || kind === 'constant'
-                ? currentClass
+                ? phpEnclosingType(capture.node)?.childForFieldName('name')?.text ?? null
                 : null,
               signature,
               startLine,
               endLine,
               metadata: {},
-            });
+            };
+            symbols.push(symbol);
+            declarations.push([symbol, capture.node]);
           }
         }
       }
 
+      // Each declaration by its node, labelled as the scanner names a source symbol (M2-13).
+      const symbolByNodeId = new Map(declarations.map(([s, node]) => [node.id, s]));
+      /**
+       * Where a reference sits, from the syntax tree (M2-13): in a declaration on one line, that
+       * declaration (`class User { public function name() { … } … }`: the method; `class B extends A`
+       * beside `class A`: B), which the scanner's line ranges cannot tell from the others on the line,
+       * as for C++ in M5-03-R2; in no declaration (`<?php echo tplf(); ?>` beside `function tplf()`),
+       * the file, marked `fileLevel` so the line rule does not pick a declaration on its line. A
+       * multi-line declaration is left to the line rule, which picks it.
+       */
+      const sourceOf = (node: any): { sourceSymbol: string | null; metadata?: Record<string, unknown> } => {
+        for (let p = node.parent; p; p = p.parent) {
+          const s = symbolByNodeId.get(p.id);
+          if (s) return { sourceSymbol: s.startLine === s.endLine ? (s.scope ? `${s.scope}::${s.name}` : s.name) : null };
+        }
+        return { sourceSymbol: null, metadata: { fileLevel: true } };
+      };
+
       // F05: Build UseImportTable
       const useTable = new Map<string, string>();
+      // `use function App\fmt [as f]`: lower-cased local name → function FQN (M0-04-R5).
+      const useFunctions = new Map<string, string>();
       const useClauses = refCaptures.get('ref.target_use_clause') || [];
       for (const capture of useClauses) {
         const node = capture.node;
@@ -119,6 +192,14 @@ export class PhpParser extends GenericWasmParser {
             }
           }
         }
+
+        // `use function` / `use const` import a function or constant: still an import, but never
+        // in the class table (M0-04-R2).
+        const declaration = parent?.type === 'namespace_use_group' ? parent.parent : parent;
+        const isKeyword = (c: any) => c.type === 'function' || c.type === 'const';
+        const importsClass = !node.children.some(isKeyword) && !declaration?.children.some(isKeyword);
+        const isFunction = (c: any) => c.type === 'function';
+        const importsFunction = node.children.some(isFunction) || !!declaration?.children.some(isFunction);
 
         const targetNode = (node.namedChildCount > 0 ? node.namedChild(0) : null) || node;
         const targetText = targetNode.text;
@@ -139,15 +220,20 @@ export class PhpParser extends GenericWasmParser {
           : targetText;
 
         const importName = aliasText || shortName;
-        useTable.set(importName, fullTarget);
+        if (importsClass) useTable.set(importName, fullTarget);
+        // Function names are case-insensitive in PHP (M0-04-R5).
+        if (importsFunction) useFunctions.set(importName.toLowerCase(), fullTarget.replace(/^\\/, ''));
 
-        // Emit import reference
+        // Emit import reference; a function or constant import says so (M5-21: its external
+        // reference is a function or constant, never a class).
+        const isConst = !importsClass && !importsFunction;
         references.push({
           sourceSymbol: null,
           targetName: fullTarget,
           referenceType: 'import',
           startLine,
           verifiability: 'verified',
+          ...(importsClass ? {} : { metadata: { phpUse: isConst ? 'const' : 'function' } }),
         });
       }
 
@@ -158,15 +244,154 @@ export class PhpParser extends GenericWasmParser {
         'hasOneOfMany',
       ]);
 
-      const resolveToFqn = (name: string): string => {
-        if (name.startsWith('\\')) {
-          return name.substring(1);
+      // PHP name resolution: `\X` is fully qualified; a first segment imported by `use` expands
+      // (aliases and partial names like Contracts\Foo); anything else is relative to the namespace
+      // in force where it is written. self/static/parent are never qualified.
+      /**
+       * The namespace in force at a node (M2-13 review): its enclosing `namespace X { … }` block,
+       * else the last `namespace X;` statement before it, else the global one. Several blocks or
+       * statements in one file, on one line or not, each name their own declarations.
+       */
+      let statements: Array<{ at: number; name: string }> | undefined;
+      const namespaceAt = (node: any): string => {
+        let root = node;
+        for (let p = node.parent; p; p = p.parent) {
+          if (p.type === 'namespace_definition' && p.childForFieldName('body')) return p.childForFieldName('name')?.text ?? '';
+          root = p;
         }
-        if (name.includes('\\')) {
-          return name;
-        }
-        return useTable.get(name) ?? name;
+        statements ??= (root.namedChildren ?? [])
+          .filter((c: any) => c.type === 'namespace_definition' && !c.childForFieldName('body'))
+          .map((c: any) => ({ at: c.startIndex, name: c.childForFieldName('name')?.text ?? '' }));
+        let found = '';
+        for (const s of statements!) if (s.at < node.startIndex) found = s.name;
+        return found;
       };
+      const resolveToFqn = (name: string, at: any): string => {
+        if (name.startsWith('\\')) return name.substring(1);
+        const [head, ...rest] = name.split('\\');
+        if (useTable.has(head!)) return [useTable.get(head!)!, ...rest].join('\\');
+        if (['self', 'static', 'parent'].includes(name.toLowerCase())) return name;
+        const namespace = namespaceAt(at);
+        return namespace ? `${namespace}\\${name}` : name;
+      };
+
+      /** The class a type node names, as `Mailer`, `?Mailer` or `\\App\\Mailer`; null for a built-in, a union or `self`. */
+      const classOfType = (type: any, at: any): string | null => {
+        const named = type?.type === 'optional_type' ? type.namedChildren[0] : type;
+        const name = named?.type === 'named_type' ? named.namedChildren[0] : null;
+        if (!name || (name.type !== 'name' && name.type !== 'qualified_name') || /^(self|static|parent)$/i.test(name.text)) return null;
+        return resolveToFqn(name.text, at);
+      };
+      /** Whether a function writes the variable `$name`: assigned, iterated into, caught, referenced or global. */
+      const writesVariable = (fn: any, name: string): boolean => fn.descendantsOfType('variable_name').some((v: any) => {
+        if (v.text !== name) return false;
+        const p = v.parent;
+        if (!p || p.type === 'simple_parameter' || p.type === 'property_promotion_parameter') return false;
+        if (['reference_assignment_expression', 'catch_clause', 'global_declaration', 'static_variable_declaration', 'by_ref'].includes(p.type)) return true;
+        if (p.type === 'foreach_statement') return p.namedChildren[0]?.id !== v.id;
+        if (p.type === 'pair' && p.parent?.type === 'foreach_statement') return true;
+        for (let a = v, q = p; q; a = q, q = q.parent) {
+          if (q.type === 'assignment_expression' || q.type === 'augmented_assignment_expression') return q.childForFieldName('left')?.id === a.id;
+          if (!['list_literal', 'array_creation_expression', 'array_element_initializer'].includes(q.type)) return false;
+        }
+        return false;
+      });
+      /** The class around a node, or null in an anonymous class (M2-22 owns it) or none. */
+      const namedOwnerOf = (node: any): any => {
+        for (let p = node.parent; p; p = p.parent) {
+          if (p.type === 'anonymous_class') return null;
+          if (PHP_TYPE_DECLARATIONS.has(p.type)) return p.childForFieldName('name') ? p : null;
+        }
+        return null;
+      };
+      /**
+       * The class a member call's receiver has, when the syntax gives it (M2-23 review): `$this` (the
+       * class around; `own`, walked as `self::`), a parameter with a class type that the function never
+       * writes (a closure or arrow function reads the one around it), and `$this->prop` declared with
+       * a class type or promoted from the constructor.
+       */
+      const typedReceiver = (call: any): { cls: string; own?: boolean } | null => {
+        const asClass = (type: any): { cls: string } | null => {
+          const name = classOfType(type, call);
+          return name ? { cls: name } : null;
+        };
+        let object = call?.childForFieldName('object');
+        while (object?.type === 'parenthesized_expression') object = object.namedChildren[0];
+        if (!object) return null;
+        if (object.type === 'variable_name' && object.text === '$this') {
+          const owner = namedOwnerOf(call);
+          return owner ? { cls: owner.childForFieldName('name').text, own: true } : null;
+        }
+        if (object.type === 'variable_name') {
+          for (let p = call.parent; p; p = p.parent) {
+            if (!['method_declaration', 'function_definition', 'anonymous_function', 'arrow_function'].includes(p.type)) continue;
+            const param = (p.childForFieldName('parameters')?.namedChildren ?? [])
+              .find((c: any) => (c.type === 'simple_parameter' || c.type === 'property_promotion_parameter') && c.childForFieldName('name')?.text === object.text);
+            if (param) {
+              if (param.namedChildren.some((c: any) => c.type === 'reference_modifier') || writesVariable(p, object.text)) return null;
+              const cls = classOfType(param.childForFieldName('type'), call);
+              return cls ? { cls } : null;
+            }
+            // A closure reads a variable it takes `use`, an arrow function every one around it.
+            const uses = p.namedChildren.find((c: any) => c.type === 'anonymous_function_use_clause');
+            const captured = p.type === 'arrow_function'
+              || (uses?.namedChildren ?? []).some((c: any) => c.type === 'variable_name' && c.text === object.text);
+            if (!captured || p.type === 'method_declaration' || p.type === 'function_definition') return null;
+          }
+          return null;
+        }
+        if (object.type === 'member_access_expression' && object.childForFieldName('object')?.text === '$this') {
+          const owner = namedOwnerOf(call);
+          const prop = object.childForFieldName('name')?.text;
+          if (!owner || !prop) return null;
+          for (const member of owner.childForFieldName('body')?.namedChildren ?? []) {
+            if (member.type === 'property_declaration'
+              && member.namedChildren.some((c: any) => c.type === 'property_element' && c.namedChildren[0]?.text === `$${prop}`)) {
+              return asClass(member.childForFieldName('type'));
+            }
+            if (member.type === 'method_declaration' && member.childForFieldName('name')?.text.toLowerCase() === '__construct') {
+              const promoted = (member.childForFieldName('parameters')?.namedChildren ?? [])
+                .find((c: any) => c.type === 'property_promotion_parameter' && c.childForFieldName('name')?.text === `$${prop}`);
+              if (promoted) return asClass(promoted.childForFieldName('type'));
+            }
+          }
+          return null;
+        }
+        return null;
+      };
+
+      // Attributes, named like classes, and PHPDoc tags (M5-10).
+      for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, (n: string) => resolveToFqn(n, node)));
+      // A type or function's own namespace (M2-13 re-review): a file of several blocks or statements
+      // declares in each, not in the file's last.
+      for (const [symbol, node] of declarations) {
+        if (PHP_NAMESPACED_KINDS.has(symbol.kind)) symbol.metadata.namespace = namespaceAt(node);
+      }
+
+      // The traits a class, trait or enum uses (`use HasUuid, \App\Logs;`), resolved like class
+      // names: the architecture `mixes` selector reads them (M5-09).
+      for (const [symbol, node] of declarations) {
+        if (symbol.kind !== 'class' && symbol.kind !== 'trait' && symbol.kind !== 'enum') continue;
+        const body = node.childForFieldName?.('body');
+        const mixins = (body?.namedChildren ?? [])
+          .filter((c: any) => c.type === 'use_declaration')
+          .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text, node)));
+        if (mixins.length) symbol.metadata.mixins = mixins;
+        // `use A, B { B::x insteadof A; A::x as ax; }` (M2-16 review): the winning trait of a method, and
+        // the aliases that give a trait method another name; `as protected` alone changes visibility only.
+        const traitRules = phpTraitRules(
+          (body?.namedChildren ?? []).filter((c: any) => c.type === 'use_declaration').flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'use_list')),
+          (n: string) => resolveToFqn(n, node),
+        );
+        if (traitRules) symbol.metadata.traitRules = traitRules;
+        // The class it extends, fully qualified: a method called on a new instance may be inherited (M2-12 review).
+        const base = node.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name');
+        if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text, node)];
+      }
+
+      // The calls of `$x->name()`, with the node of the method's name (M2-23: in migrations, seeders,
+      // factories and views, only those whose class the syntax gives link a method).
+      const memberCalls = new Map<ExtractedReference, any>();
 
       // Process standard captures (extends, implements, calls, instantiations)
       for (const [captureName, captures] of refCaptures) {
@@ -177,7 +402,11 @@ export class PhpParser extends GenericWasmParser {
           captureName === 'ref.target_property' ||
           captureName === 'ref.target_dispatch' ||
           captureName === 'ref.target_dispatch_static' ||
-          captureName === 'ref.target_notify'
+          captureName === 'ref.target_notify' ||
+          captureName === 'ref.target_function_call' ||
+          captureName === 'ref.target_self_call' ||
+          captureName === 'ref.target_class_constant' ||
+          captureName === 'ref.target_require'
         ) {
           continue;
         }
@@ -215,18 +444,164 @@ export class PhpParser extends GenericWasmParser {
               referenceType === 'instantiation' ||
               (referenceType === 'call' && capture.node.parent?.type === 'scoped_call_expression')
             ) {
-              resolvedTarget = resolveToFqn(cleaned);
+              resolvedTarget = resolveToFqn(cleaned, capture.node);
             }
 
-            references.push({
-              sourceSymbol: null,
+            // `(new Order())->total()`: the class whose method the scanner links (M2-12).
+            let newClass: string | null = null;
+            const call = capture.node.parent;
+            if (referenceType === 'call' && call?.type === 'member_call_expression' && call.childForFieldName('name')?.id === capture.node.id) {
+              let object = call.childForFieldName('object');
+              while (object?.type === 'parenthesized_expression') object = object.namedChildren[0];
+              const created = object?.type === 'object_creation_expression'
+                ? object.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name' || c.type === 'relative_scope') : null;
+              const written = created?.text.toLowerCase();
+              // `new self()` / `new static()`: the enclosing class; `new parent()`: the class it extends.
+              const owner = written === 'self' || written === 'static' || written === 'parent' ? phpEnclosingType(created) : null;
+              const ownerName = written === 'parent'
+                ? owner?.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name')?.text
+                : owner?.childForFieldName('name')?.text;
+              // `new parent()` in a class that extends nothing names no class either.
+              if (created && owner && !ownerName && owner.type === 'class_declaration') continue;
+              if (created) newClass = owner ? (ownerName ? resolveToFqn(ownerName, created) : null) : resolveToFqn(created.text, created);
+              // `(new $cls())->m()`, `(new class { … })->m()`: a class the syntax does not name, so no
+              // class to link and never a same-named method by name (review of M2-12).
+              else if (object?.type === 'object_creation_expression') continue;
+            }
+
+            const source = sourceOf(capture.node);
+            const reference: ExtractedReference = {
+              sourceSymbol: source.sourceSymbol,
               targetName: resolvedTarget,
               referenceType,
               startLine,
               verifiability,
-            });
+              ...(newClass || source.metadata ? { metadata: { ...source.metadata, ...(newClass ? { newClass } : {}) } } : {}),
+            };
+            references.push(reference);
+            if (referenceType === 'call' && capture.node.parent?.type === 'member_call_expression') memberCalls.set(reference, capture.node);
           }
         }
+      }
+
+      // `self::m()`, `static::m()`, `parent::m()` (M2-16): a call of the method m of the class around
+      // it (self, static: late static binding is not followed, so an override in a subclass is not
+      // linked) or of its parent (parent). The scanner walks the class as for `new self()`: the class,
+      // its traits, then its parent. `selfCall` makes a method the walk does not find link nothing,
+      // where an unresolved `(new X())->m()` falls back to name lookup. A closure or arrow function
+      // binds `self` to the class around it; an anonymous class is not that class (M2-22 owns it), and
+      // outside any class `self` names nothing.
+      for (const capture of refCaptures.get('ref.target_self_call') || []) {
+        const call = capture.node.parent;
+        const written = call?.childForFieldName('scope')?.text.toLowerCase();
+        if (!call || (written !== 'self' && written !== 'static' && written !== 'parent')) continue;
+        let owner: any = null;
+        for (let p = call.parent; p; p = p.parent) {
+          if (p.type === 'anonymous_class') break;
+          if (PHP_TYPE_DECLARATIONS.has(p.type)) { owner = p; break; }
+        }
+        const ownerName = owner?.childForFieldName('name')?.text;
+        if (!owner || !ownerName) continue;
+        // The class the scanner's walk starts at: for self and static the class around the call, which
+        // name lookup finds in this file first; for parent the class `extends` names.
+        let start: string = ownerName;
+        if (written === 'parent') {
+          // Only a class has a parent; `class B` with no `extends` has none.
+          const base = owner.type === 'class_declaration'
+            ? owner.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name')
+            : null;
+          if (!base) continue;
+          start = resolveToFqn(base.text, owner);
+        }
+        const { sourceSymbol, metadata } = sourceOf(capture.node);
+        references.push({
+          sourceSymbol,
+          targetName: capture.node.text,
+          referenceType: 'call',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: 'verified',
+          metadata: { ...metadata, newClass: start, selfCall: true },
+        });
+      }
+
+      // Function calls, with the candidate FQNs in PHP's resolution order: `\X\f` is fully
+      // qualified; `use function` names the function; a qualified name expands its first segment
+      // through `use` or the current namespace; an unqualified name tries the current namespace,
+      // then the global function (M0-04-R5).
+      const functionCandidates = (raw: string, at: any): string[] => {
+        const namespace = namespaceAt(at);
+        if (raw.startsWith('\\')) return [raw.substring(1)];
+        const relative = raw.match(/^namespace\\(.+)$/i)?.[1];
+        if (relative) return [namespace ? `${namespace}\\${relative}` : relative];
+        if (raw.includes('\\')) return [resolveToFqn(raw, at)];
+        const imported = useFunctions.get(raw.toLowerCase());
+        if (imported) return [imported];
+        return namespace ? [`${namespace}\\${raw}`, raw] : [raw];
+      };
+      for (const capture of refCaptures.get('ref.target_function_call') || []) {
+        const raw = capture.node.text;
+        if (!raw) continue;
+        const candidates = functionCandidates(raw, capture.node);
+        const shortName = raw.split('\\').at(-1)!;
+        const { sourceSymbol, metadata } = sourceOf(capture.node);
+        references.push({
+          sourceSymbol,
+          targetName: candidates[0]!,
+          referenceType: 'call',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: COMMON_FRAMEWORK_METHODS.has(shortName) ? 'inferred' : 'verified',
+          phpFunction: candidates,
+          ...(metadata ? { metadata } : {}),
+        });
+      }
+
+      // require / include: string literals, __DIR__, dirname(__FILE__ | __DIR__) and `.`
+      // concatenation. A __DIR__ path is emitted as `__DIR__/…` (relative to the including file),
+      // a literal as written; variables and constants are not evaluated (M0-04-R5).
+      const DIR = '\u0000DIR';
+      const evalPath = (node: any): string | null => {
+        switch (node.type) {
+          case 'parenthesized_expression':
+            return node.namedChildCount === 1 ? evalPath(node.namedChild(0)) : null;
+          case 'string':
+          case 'encapsed_string':
+            // Interpolation and escape sequences are not evaluated.
+            return node.namedChildren.every((c: any) => c.type === 'string_content')
+              ? node.namedChildren.map((c: any) => c.text).join('')
+              : null;
+          case 'name':
+            return node.text === '__DIR__' ? DIR : null;
+          case 'function_call_expression': {
+            if (node.childForFieldName('function')?.text !== 'dirname') return null;
+            const args = (node.childForFieldName('arguments')?.namedChildren ?? []).filter((c: any) => c.type === 'argument');
+            if (args.length !== 1) return null;
+            const arg = args[0].text;
+            return arg === '__FILE__' ? DIR : arg === '__DIR__' ? `${DIR}/..` : null;
+          }
+          case 'binary_expression': {
+            if (node.child(1)?.text !== '.') return null;
+            const left = evalPath(node.child(0));
+            const right = evalPath(node.child(2));
+            return left === null || right === null ? null : left + right;
+          }
+          default:
+            return null;
+        }
+      };
+      for (const capture of refCaptures.get('ref.target_require') || []) {
+        const path = evalPath(capture.node);
+        if (!path) continue;
+        let target: string;
+        if (path.startsWith(`${DIR}/`)) target = `__DIR__${path.substring(DIR.length)}`;
+        else if (path.includes(DIR) || path.startsWith('/') || path.includes('://')) continue;
+        else target = path;
+        references.push({
+          sourceSymbol: null,
+          targetName: target,
+          referenceType: 'require',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: 'verified',
+        });
       }
 
       // F06: Helper function to find named type descendants
@@ -268,8 +643,7 @@ export class PhpParser extends GenericWasmParser {
       const SCALAR_TYPES = new Set([
         'string', 'int', 'integer', 'float', 'double', 'bool', 'boolean',
         'array', 'object', 'callable', 'iterable', 'void', 'null', 'never',
-        'mixed', 'self', 'static', 'parent',
-        'Collection', 'Builder', 'Request', 'Response',
+        'mixed', 'self', 'static', 'parent', 'false', 'true',
       ]);
 
       const processTypeHints = (capturesList: any[], edgeType: 'param_type' | 'return_type') => {
@@ -281,10 +655,11 @@ export class PhpParser extends GenericWasmParser {
           const namedTypes = findNamedTypes(capture.node);
           for (const typeNode of namedTypes) {
             const typeText = typeNode.text;
-            if (SCALAR_TYPES.has(typeText)) continue;
-            if (typeText.startsWith('\\Illuminate\\') || typeText.startsWith('Illuminate\\')) continue;
-
-            const resolved = resolveToFqn(typeText);
+            if (SCALAR_TYPES.has(typeText.toLowerCase())) continue;
+            // Framework types (Illuminate\Http\Request, …) are external; app types named Request or
+            // Response are not, so filter on the resolved name, not the short one.
+            const resolved = resolveToFqn(typeText, typeNode);
+            if (resolved.startsWith('Illuminate\\')) continue;
             references.push({
               sourceSymbol,
               targetName: resolved,
@@ -321,16 +696,32 @@ export class PhpParser extends GenericWasmParser {
         return str.replace(/^['"]|['"]$/g, '').trim();
       };
 
-      const getArgText = (argsNode: any, idx: number): string | null => {
+      const notComment = (c: any) => c.type !== 'comment';
+      // The value node of argument `idx`; comments are not arguments (`bind(/* x */ Repo::class)`, M0-04-R2).
+      const argValue = (argsNode: any, idx: number): any => {
         if (!argsNode || argsNode.type !== 'arguments') return null;
-        const argNode = argsNode.namedChild(idx);
+        const argNode = argsNode.namedChildren.filter(notComment)[idx];
         if (!argNode) return null;
-        const valNode = argNode.type === 'argument' ? (argNode.namedChild(0) || argNode) : argNode;
+        return argNode.type === 'argument' ? (argNode.namedChildren.find(notComment) || argNode) : argNode;
+      };
+
+      // The class a value names: `X::class` as written, or a string (single- or double-quoted).
+      const classNameOf = (valNode: any): string | null => {
         if (valNode.type === 'class_constant_access_expression') {
-          const classNode = valNode.namedChild(0);
-          if (classNode) return classNode.text;
+          return valNode.namedChild(0)?.text ?? null;
         }
-        return cleanQuotes(valNode.text);
+        if (valNode.type === 'string' || valNode.type === 'encapsed_string') {
+          // A class name in a string is always fully qualified: mark it so resolveToFqn keeps it.
+          const name = cleanQuotes(valNode.text).replace(/\\\\/g, '\\').replace(/^\\/, '');
+          return name ? `\\${name}` : null;
+        }
+        return null;
+      };
+
+      const getArgText = (argsNode: any, idx: number): string | null => {
+        const valNode = argValue(argsNode, idx);
+        if (!valNode) return null;
+        return classNameOf(valNode) ?? cleanQuotes(valNode.text);
       };
 
       const modelClasses = new Set<string>();
@@ -357,26 +748,21 @@ export class PhpParser extends GenericWasmParser {
         if (!argsNode) continue;
         const targetArgText = getArgText(argsNode, 0);
         if (targetArgText) {
-          const targetFqn = resolveToFqn(targetArgText);
+          const targetFqn = resolveToFqn(targetArgText, cap.node);
           const startLine = cap.node.startPosition.row + 1;
-          
-          const arg0 = argsNode.namedChild(0);
-          if (arg0) {
-            const valNode = arg0.type === 'argument' ? (arg0.namedChild(0) || arg0) : arg0;
-            const isClassConst = valNode ? valNode.type === 'class_constant_access_expression' : false;
+          const isClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
-            references.push({
-              sourceSymbol: className,
-              targetName: targetFqn,
-              referenceType: 'relation',
-              startLine,
-              verifiability: isClassConst ? 'verified' : 'inferred',
-              metadata: {
-                relationshipMethod: methodName,
-                relationshipType: RELATIONSHIP_TYPES[methodName] || 'one-to-many',
-              },
-            });
-          }
+          references.push({
+            sourceSymbol: className,
+            targetName: targetFqn,
+            referenceType: 'relation',
+            startLine,
+            verifiability: isClassConst ? 'verified' : 'inferred',
+            metadata: {
+              relationshipMethod: methodName,
+              relationshipType: RELATIONSHIP_TYPES[methodName] || 'one-to-many',
+            },
+          });
         }
       }
 
@@ -408,28 +794,27 @@ export class PhpParser extends GenericWasmParser {
         const abstractVal = getArgText(argsNode, 0);
         if (abstractVal) {
           const concreteVal = getArgText(argsNode, 1);
-          const abstractFqn = resolveToFqn(abstractVal);
-          const concreteFqn = concreteVal ? resolveToFqn(concreteVal) : null;
+          const abstractFqn = resolveToFqn(abstractVal, cap.node);
+          // Only a class constant (Concrete::class) or a class-name string names a concrete class;
+          // a closure or factory is not one.
+          const valNode1 = argValue(argsNode, 1);
+          const namesClass = !!valNode1 && classNameOf(valNode1) !== null;
+          const concreteFqn = concreteVal && namesClass ? resolveToFqn(concreteVal, cap.node) : null;
           const startLine = cap.node.startPosition.row + 1;
+          const isAbstractClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
-          const arg0 = argsNode.namedChild(0);
-          if (arg0) {
-            const valNode0 = arg0.type === 'argument' ? (arg0.namedChild(0) || arg0) : arg0;
-            const isAbstractClassConst = valNode0 ? valNode0.type === 'class_constant_access_expression' : false;
-
-            references.push({
-              sourceSymbol: encMethod || 'register',
-              targetName: abstractFqn,
-              referenceType: 'binding',
-              startLine,
-              verifiability: isAbstractClassConst ? 'verified' : 'inferred',
-              metadata: {
-                bindingType: methodName,
-                concreteClass: concreteFqn,
-                serviceProviderPhase: encMethod === 'boot' ? 'boot' : 'register',
-              },
-            });
-          }
+          references.push({
+            sourceSymbol: encMethod || 'register',
+            targetName: abstractFqn,
+            referenceType: 'binding',
+            startLine,
+            verifiability: isAbstractClassConst ? 'verified' : 'inferred',
+            metadata: {
+              bindingType: methodName,
+              concreteClass: concreteFqn,
+              serviceProviderPhase: encMethod === 'boot' ? 'boot' : 'register',
+            },
+          });
         }
       }
 
@@ -437,7 +822,7 @@ export class PhpParser extends GenericWasmParser {
       const targetDispatchCaptures = refCaptures.get('ref.target_dispatch') || [];
       for (const cap of targetDispatchCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
         
@@ -469,7 +854,7 @@ export class PhpParser extends GenericWasmParser {
       const targetDispatchStaticCaptures = refCaptures.get('ref.target_dispatch_static') || [];
       for (const cap of targetDispatchStaticCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
 
@@ -481,6 +866,28 @@ export class PhpParser extends GenericWasmParser {
             break;
           }
           curr = curr.parent;
+        }
+
+        // Event::dispatch(new X) / Bus::dispatch(new X): the facade is only the channel; the
+        // dispatched class is the `new` argument.
+        const facadeChannel = /^(?:\\?Illuminate\\Support\\Facades\\)?(Event|Bus|Queue)$/.exec(targetFqn) || /^(Event|Bus|Queue)$/.exec(targetRaw);
+        if (facadeChannel) {
+          const call = curr?.type === 'scoped_call_expression' ? curr : null;
+          const created = call?.childForFieldName('arguments')?.descendantsOfType?.('object_creation_expression')?.[0];
+          const createdName = created?.namedChildren?.find((c: any) => c.type === 'name' || c.type === 'qualified_name')?.text;
+          if (!createdName) continue;
+          references.push({
+            sourceSymbol: methodName,
+            targetName: resolveToFqn(createdName, cap.node),
+            referenceType: 'dispatch',
+            startLine,
+            verifiability: 'verified',
+            metadata: {
+              dispatchMethod: `${facadeChannel[1]}::${methodCallName}`,
+              dispatchedRole: facadeChannel[1] === 'Event' ? 'event' : 'job',
+            }
+          });
+          continue;
         }
 
         references.push({
@@ -496,10 +903,43 @@ export class PhpParser extends GenericWasmParser {
         });
       }
 
+      // EventServiceProvider: protected $listen = [Event::class => [Listener::class, …]]
+      // File-level edges originate here, so each listener gets a `binding` edge from the provider
+      // carrying the event it handles (F12 stretch goal). Read from the property's syntax tree, so a
+      // docblock example or a commented-out listener is ignored, and an event or listener may be
+      // `X::class` or a class-name string (M0-04-R2).
+      for (const cap of refCaptures.get('ref.target_property') || []) {
+        const element = cap.node.namedChildren.find((c: any) => c.type === 'property_element');
+        const variable = element?.namedChildren.find((c: any) => c.type === 'variable_name');
+        if (!element || variable?.text !== '$listen') continue;
+        const array = element.namedChildren.find((c: any) => c.type === 'array_creation_expression');
+        for (const entry of array?.namedChildren.filter((c: any) => c.type === 'array_element_initializer') ?? []) {
+          const [key, value] = entry.namedChildren.filter(notComment);
+          const event = key && value ? classNameOf(key) : null;
+          if (!event) continue;
+          const listeners = value.type === 'array_creation_expression'
+            ? value.namedChildren.filter((c: any) => c.type === 'array_element_initializer').map((c: any) => c.namedChildren.find(notComment))
+            : [value];
+          for (const listenerNode of listeners) {
+            // 'App\Listeners\X@handle' names the class X.
+            const listener = listenerNode ? classNameOf(listenerNode)?.replace(/@\w*$/, '') : null;
+            if (!listener) continue;
+            references.push({
+              sourceSymbol: null,
+              targetName: resolveToFqn(listener, key),
+              referenceType: 'binding',
+              startLine: key.startPosition.row + 1,
+              verifiability: listenerNode.type === 'class_constant_access_expression' ? 'verified' : 'inferred',
+              metadata: { bindingType: 'listen', event: resolveToFqn(event, key) },
+            });
+          }
+        }
+      }
+
       const targetNotifyCaptures = refCaptures.get('ref.target_notify') || [];
       for (const cap of targetNotifyCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
 
@@ -630,7 +1070,8 @@ export class PhpParser extends GenericWasmParser {
       // Check if file is a route file
       const isRouteFile = filePath.replace(/\\/g, '/').includes('routes/');
       if (isRouteFile) {
-        fileMetadata = { laravelRole: 'route_file' };
+        // Keep the namespace: class resolution reads it (M0-04-R2).
+        fileMetadata = { ...fileMetadata, laravelRole: 'route_file' };
       }
 
       // F10: Classification of migration, seeder, and factory roles
@@ -660,10 +1101,49 @@ export class PhpParser extends GenericWasmParser {
         for (const sym of symbols) {
           sym.metadata.laravelRole = laravelRole;
         }
-        references.length = 0;
+      }
+
+      // F10 dropped every reference of a migration, seeder or factory, and returned none for a Blade
+      // view; M2-23 keeps the ones that name a class (use, extends, new, `X::m()`, type hints, a
+      // function call) and adds `X::class`, so a seeder reaches the seeders it calls and a factory
+      // its model. A method called on an object (`$table->id()`, `$order->name()`) links the method
+      // of the class the syntax gives and nothing else: `$this->m()`, `$typed->m()` for a parameter
+      // with a class type, `$this->typed->m()` for a typed or promoted property, `(new X())->m()`.
+      // Such a call has no name lookup to fall back to (`noFallback`): the schema builder's and the
+      // view helpers' names would link every method of that name in the project, and `(new Order())->save()`
+      // past Eloquent's vendor base would link an unrelated `save`.
+      if (laravelRole || isView) {
+        for (const capture of refCaptures.get('ref.target_class_constant') || []) {
+          const { sourceSymbol, metadata } = sourceOf(capture.node);
+          references.push({
+            sourceSymbol,
+            targetName: resolveToFqn(capture.node.text, capture.node),
+            referenceType: 'import',
+            startLine: capture.node.startPosition.row + 1,
+            verifiability: 'verified',
+            metadata: { ...metadata, classConstant: true },
+          });
+        }
+        for (let i = references.length - 1; i >= 0; i--) {
+          const nameNode = memberCalls.get(references[i]!);
+          if (!nameNode) continue;
+          const ref = references[i]!;
+          const typed = typedReceiver(nameNode.parent);
+          if (typed) {
+            ref.verifiability = 'verified';
+            ref.metadata = { ...ref.metadata, newClass: typed.cls, ...(typed.own ? { selfCall: true } : { noFallback: true }) };
+          } else if (typeof ref.metadata?.newClass === 'string') {
+            ref.metadata = { ...ref.metadata, noFallback: true };
+          } else {
+            references.splice(i, 1);
+          }
+        }
       }
     } catch (e: any) {
       errors.push({ message: e.message, line: 0 });
+    } finally {
+      // The nodes are read; free the tree (M2-08-R9).
+      parsed?.dispose();
     }
 
     // F12: Suppress duplicate instantiation/call references for specific dispatch/notify targets
@@ -691,16 +1171,27 @@ export class PhpParser extends GenericWasmParser {
 
     for (const ref of finalReferences) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
+      if (ref.phpFunction) continue; // a function call is never a facade
       if (ref.referenceType === 'call' || ref.referenceType === 'instantiation') {
         const shortName = ref.targetName.split('\\').at(-1) ?? ref.targetName;
-        if (shortName !== 'Route') {
-          const resolved = mergedFacadeMap[shortName];
-          if (resolved) {
+        // Only a real facade reference is rewritten: the facade class itself, or a global alias
+        // (unqualified in a non-namespaced file). An imported or same-namespace class named
+        // Cache/Event/Response is the app's own class.
+        const isFacadeReference = ref.targetName === shortName || ref.targetName === `Illuminate\\Support\\Facades\\${shortName}`;
+        if (shortName !== 'Route' && isFacadeReference) {
+          // Own keys only: `$x->toString()` read Object.prototype.toString, a function, as the facade's
+          // class; that dropped the call and failed every parallel scan reaching it (M0-06-R2).
+          const resolved = Object.hasOwn(mergedFacadeMap, shortName) ? mergedFacadeMap[shortName] : undefined;
+          if (typeof resolved === 'string' && resolved) {
+            // The class the file names (`\Cache` is the global alias even in a namespaced file),
+            // kept for its external reference (M5-21 review).
+            const facadeClass = ref.targetName;
             ref.targetName = resolved;
             ref.verifiability = 'inferred';
             ref.metadata = {
               ...ref.metadata,
               facadeAlias: shortName,
+              facadeClass,
               isRawDbAccess: shortName === 'DB',
             };
           }
@@ -708,7 +1199,7 @@ export class PhpParser extends GenericWasmParser {
       }
     }
 
-    return { symbols, references: finalReferences, errors, fileMetadata };
+    return { symbols, references: finalReferences, errors, fileMetadata, ...(ambient ? { ambient } : {}) };
   }
 
   protected override extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {

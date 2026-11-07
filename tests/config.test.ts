@@ -43,8 +43,12 @@ describe('Config manager', () => {
 
     const config = await Config.init(workspace, 'laravel-repo', true, true);
     expect(config.repos[0].framework).toBe('laravel');
-    expect(config.settings.excludePatterns).toContain('database/migrations/**');
     expect(config.settings.excludePatterns).toContain('bootstrap/cache/**');
+    expect(config.settings.excludePatterns).toContain('storage/**');
+    // D043 (M2-29): migrations, seeders, factories and views are indexed by default.
+    for (const p of ['database/migrations/**', 'database/seeders/**', 'database/factories/**', 'resources/views/**', '**/*.blade.php']) {
+      expect(config.settings.excludePatterns).not.toContain(p);
+    }
   });
 
   it('init auto-detects PHP / JS files', async () => {

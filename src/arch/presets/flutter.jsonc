@@ -1,0 +1,33 @@
+// mapx:preset/flutter: a Flutter application.
+// AR-15 (M5-17-R1). By the usual lib/ folders, and by the state-management base classes wherever a
+// class lives (ChangeNotifier, ValueNotifier, Bloc, Cubit, Riverpod's notifiers). Screens and
+// widgets reach services only through their state; models depend on nothing.
+// Parameter: root, the folder holding the Dart sources ("lib/" by default).
+{
+  "parameters": { "root": "lib/" },
+  "layers": [
+    // The entry point and the app widget.
+    { "name": "App", "selectors": [{ "path": "%root%{main,app}.dart" }] },
+    // Full screens (routes).
+    { "name": "Screens", "selectors": [{ "path": "%root%{screens,pages,views}/**" }] },
+    // Reusable widgets.
+    { "name": "Widgets", "selectors": [{ "path": "%root%{widgets,components}/**" }] },
+    // State management: notifiers, blocs, cubits, providers, controllers.
+    { "name": "State", "selectors": [
+      { "path": "%root%{state,providers,blocs,bloc,cubits,notifiers,controllers,viewmodels}/**" },
+      { "inherits": "/(^|\\.)(ChangeNotifier|ValueNotifier|Bloc|Cubit|StateNotifier|Notifier|AsyncNotifier)$/" }
+    ] },
+    // Services, repositories and API clients.
+    { "name": "Services", "selectors": [{ "path": "%root%{services,repositories,data,api}/**" }] },
+    // Plain data models.
+    { "name": "Models", "selectors": [{ "path": "%root%{models,domain,entities}/**" }] }
+  ],
+  "rules": {
+    "App": ["Screens", "Widgets", "State", "Services"],
+    "Screens": ["Widgets", "State", "Models"],
+    "Widgets": ["State", "Models"],
+    "State": ["Services", "Models"],
+    "Services": ["Models"],
+    "Models": []
+  }
+}

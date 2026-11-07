@@ -1,0 +1,13 @@
+// Synthetic (M5-02-R1): three problems for arch validate-config, in this order.
+{
+  "layers": [
+    // 1. an unknown selector key (a typo of "path")
+    { "name": "Http", "selectors": [{ "paht": "app/Http/**" }] },
+    // 2. a parameter without a value, in a path selector
+    { "name": "Api", "selectors": [{ "path": "%Src%/api/**" }] }
+  ],
+  "rules": {
+    // 3. an unknown target layer
+    "Http": ["Servce"]
+  }
+}

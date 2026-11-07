@@ -1,0 +1,65 @@
+/* MapX brand tokens (M7-01), taken from the dashboard design system (src/ui/styles.css).
+   The brand magenta #ff02fe fails WCAG AA as text on white, so on light backgrounds it fills and
+   borders, and text uses --mapx-brand-text. M7-06 holds the axe check that proves the contrast. */
+:root {
+  --mapx-brand: #ff02fe;
+  --mapx-brand-text: #a100a0;
+  --mapx-slate: #14161a;
+  --vp-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* The default light grey (#929295) is 2.9:1 on the code-block background; this is above 4.5:1. */
+  --vp-c-text-3: #66666d;
+  --vp-c-brand-1: var(--mapx-brand-text);
+  --vp-c-brand-2: #8a008a;
+  --vp-c-brand-3: var(--mapx-brand);
+  --vp-c-brand-soft: rgba(255, 2, 254, 0.12);
+  --vp-button-brand-bg: var(--mapx-brand);
+  --vp-button-brand-text: var(--mapx-slate);
+  --vp-button-brand-hover-bg: #ff4dfe;
+  --vp-button-brand-hover-text: var(--mapx-slate);
+  --vp-button-brand-active-bg: #d900d8;
+  --vp-button-brand-active-text: var(--mapx-slate);
+}
+
+.dark {
+  --vp-c-bg: #14161a;
+  --vp-c-bg-alt: #1b1d23;
+  --vp-c-bg-elv: #21252b;
+  --vp-c-bg-soft: #1b1d23;
+  --vp-c-divider: #3e4452;
+  --vp-c-text-1: #f3f4f6;
+  --vp-c-text-2: #b7bdc8;
+  --vp-c-text-3: #8f97a5;
+  --vp-c-brand-1: #ff6bfe;
+  --vp-c-brand-2: #ff4dfe;
+  --vp-c-brand-3: var(--mapx-brand);
+}
+
+/* The default theme hides the footer on pages with a sidebar (the guides). The creator credit must
+   stay visible there, so it is shown to the right of the sidebar on wide screens. */
+.VPFooter.has-sidebar {
+  display: block !important;
+}
+@media (min-width: 960px) {
+  .VPFooter.has-sidebar {
+    padding-left: calc(var(--vp-sidebar-width) + 32px);
+  }
+}
+
+/* Code highlighting: the default token colours of VitePress's GitHub themes are below 4.5:1 on the code
+   background in places (found by axe on every guide, M7-06). Each rule darkens or lightens one token
+   colour just enough; the code itself is untouched. Matched on the inline style Shiki writes. */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#D73A49' i] { color: #b31d28 !important; } /* 4.2 -> 6.2 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#E36209' i] { color: #b24700 !important; } /* 3.2 -> 5.1 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#6A737D' i] { color: #586069 !important; } /* 4.45 -> 5.9 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#22863A' i] { color: #1b6e2e !important; } /* 4.3 -> 5.9 */
+html.dark .vp-adaptive-theme span[style*='--shiki-dark:#6A737D' i] { color: #8b949e !important; } /* 3.5 -> 5.5 */
+
+/* The search button's aria-label is "Search". Its visible text must be part of that name (WCAG 2.5.3),
+   but the theme adds a key hint ("Ctrl K", or the Command key on a Mac) when the page loads, which the
+   label cannot know. The hint is hidden, so the visible text is exactly "Search" at every width (below
+   768 px it is only the icon, and the label names it). Ctrl+K and Cmd+K still open the search. */
+.DocSearch-Button-Keys {
+  display: none !important;
+}

@@ -4,12 +4,23 @@ export interface ProviderTemplate {
   content: string;
   /** True if this template is an MCP server config (JSON) rather than an instruction doc */
   isMcpConfig?: boolean;
+  /** Further templates written whenever this provider is (e.g. Aider's .aider.conf.yml). */
+  companions?: string[];
+  /** Companion-only templates are not offered as providers of their own. */
+  hidden?: boolean;
+  /** MCP_CONFIGS entries written whenever this provider is generated (Zed's .zed/settings.json). */
+  mcpConfigs?: string[];
+  /**
+   * Files earlier mapx versions wrote for this provider. One that still carries the mapx block is
+   * removed when the provider is generated (Continue's `.continue/mapx.yaml`, M0-09-R4).
+   */
+  legacyFiles?: string[];
 }
 
 /**
  * MCP config definitions for agent tools.
  * Each entry generates a project-local JSON config file that auto-registers
- * mapx as an MCP server so the agent can discover all 26 tools on startup.
+ * mapx as an MCP server so the agent can discover all 39 tools on startup.
  *
  * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
  * used — the entire file is owned by mapx and can safely be overwritten).
@@ -27,10 +38,25 @@ export interface McpConfigEntry {
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { supportedLanguageCount } from '../languages/registry.js';
+
+/** The npm package that provides the `mapx` binary (the unscoped name `mapx` is not ours). */
+export const NPM_PACKAGE = '@mgamil/mapx';
+/** Stated in every template, derived from the registry (M0-12-R6). */
+const LANGUAGE_COUNT = supportedLanguageCount();
+
+/** The architecture-rules workflow (M5-14, AR-19): check a dependency before writing it. */
+const ARCH_WORKFLOW = `## Architecture Rules
+
+When the project has \`.mapx/architecture.jsonc\` (\`mapx_arch_init\` proposes one, and writes it only with \`write: true\`):
+
+1. **Before adding an import across modules, call \`mapx_arch_allowed\`** with \`from\` (the file or symbol you are editing) and \`to\` (what you want to use: a layer \`Domain\`, a file \`src/domain/Order.ts\`, a symbol \`Order::total\`, a package \`npm:express\` or \`express\`, or a built-in \`node:fs\`). If \`allowed\` is false, read \`reason\`. \`alternatives\` lists matching symbols (a supertype, or a similar name) that the rules let \`from\` use; check that one fits before switching to it.
+2. Call \`mapx_arch_explain\` to see why an element is in a layer, or why a dependency is refused.
+3. After editing, call \`mapx_arch_check\` with \`sync: true\` (narrow it with \`file\` or \`since\`): \`exitCode\` 1 means a violation to fix. Without \`sync: true\`, every architecture tool refuses an index older than your edits (\`exitCode\` 4); pass it to \`mapx_arch_allowed\` too once you have edited files.`;
 
 /**
- * Build the mapx MCP server command. Prefers global `mapx` binary; falls back
- * to `npx -y mapx` for npm-installed projects.
+ * Build the mapx MCP server command: the global `mapx` binary installed by
+ * `npm install -g @mgamil/mapx`.
  */
 function mcpCommand(): { command: string; args: string[] } {
   return { command: 'mapx', args: [] };
@@ -117,6 +143,26 @@ export const MCP_CONFIGS: McpConfigEntry[] = [
     },
   },
   {
+    // Zed reads MCP servers from `context_servers` in its project settings (M0-09-R2).
+    name: 'zed',
+    filename: '.zed/settings.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.zed'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        context_servers: {
+          mapx: {
+            source: 'custom',
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
     name: 'antigravity',
     filename: '.agents/mcp.json',
     detect: (dir: string) => {
@@ -136,6 +182,16 @@ export const MCP_CONFIGS: McpConfigEntry[] = [
   },
 ];
 
+/** A Continue slash command: a markdown prompt with `invokable: true` front matter (M0-09-R4). */
+function continuePrompt(name: string, description: string, prompt: string): ProviderTemplate {
+  return {
+    filename: `.continue/prompts/${name}.md`,
+    isAppend: false,
+    hidden: true,
+    content: `---\nname: ${name}\ndescription: ${description}\ninvokable: true\n---\n${prompt}`,
+  };
+}
+
 export const TEMPLATES: Record<string, ProviderTemplate> = {
   generic: {
     filename: 'AGENTS.md',
@@ -146,7 +202,7 @@ This project uses **MapxGraph** — a local code graph memory system that provid
 
 ## What MapxGraph Does
 
-MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`.
+MapxGraph scans source files across **${LANGUAGE_COUNT} languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
 
 This means you (the LLM) can quickly understand the codebase structure without reading every file.
 
@@ -159,7 +215,7 @@ All commands accept a target directory. Three ways to specify:
 mapx scan /path/to/project
 
 # 2. --dir / -d flag
-mapx scan --dir /path/to/project
+mapx export --dir /path/to/project
 mapx query "MyClass" -d /path/to/project
 
 # 3. Global flag (works with any subcommand)
@@ -168,64 +224,89 @@ mapx -d /path/to/project scan
 
 ### Available Commands
 
-- \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore)
+- \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore, discovers monorepo packages & nested repos)
 - \`mapx uninit [path]\` - Remove .mapx/ and reverse integration changes
-- \`mapx scan [path]\` - Full scan
-- \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast)
+- \`mapx scan [path]\` - Full scan (use \`--force\` to bypass cache, \`--no-parallel\` to disable worker threads)
+- \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast, use \`--no-parallel\` to disable worker threads)
 - \`mapx status [path]\` - Check what changed since last scan
 - \`mapx export [--dir path]\` - Export compact graph summary
 - \`mapx export --format=<fmt>\` - Export as \`llm\`, \`json\`, \`dot\`, \`svg\`, or \`toon\`
 - \`mapx export --cluster <mode> --depth <n>\` - Cluster-aware DOT/SVG export
-- \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit] [--format text|json]\` - Advanced filtered search with auto-expand and fuzzy fallback
-- \`mapx deps <file> [--dir path]\` - Show dependencies for a file
+- \`mapx deps <file> [--dir path]\` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - \`mapx summary [path]\` - Project summary
-- \`mapx clusters [--dir path]\` - List detected clusters/modules
-- \`mapx trace <symbol> [--dir path]\` - Trace data flow
+- \`mapx clusters [--dir path] [--source source] [--json]\` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
+- \`mapx trace [symbol-or-file] [--dir path] [--direction up|down|both] [--depth n] [--include-structural] [--sources] [--sinks] [--include-leaf-libraries]\` - Trace data flow, path, entry points (sources), or terminal consumers (sinks)
 - \`mapx sources [--dir path]\` - Find entry points (data sources) in the codebase
-- \`mapx sinks [--dir path]\` - Find terminal consumers (data sinks) in the codebase
+- \`mapx sinks [--dir path] [--include-leaf-libraries]\` - Find terminal consumers (data sinks) in the codebase
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
 - \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol (fuzzy fallback on typos)
 - \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol (fuzzy fallback on typos)
+- \`mapx metrics [path] [--top n] [--exclude globs] [--format json]\` - Files ranked by coupling (in/out/total degree, instability, PageRank)
+- \`mapx edges [file] [--direction dir] [--type types] [--format json]\` - Incoming and outgoing edges of a file (without a file: --from/--to filtered list)
+- \`mapx routes [path] [--framework name] [--method verb] [--json]\` - Show framework routes
+- \`mapx hooks [path] [--framework name] [--type type] [--json]\` - Show framework hooks
+- \`mapx profile [path]\` - Show codebase profile (archetype, frameworks, active taxonomy)
+- \`mapx arch [path] [--smells] [--dsm] [--violations]\` - Full architecture and health report
+- \`mapx explain <file>\` - Explain file role classification signals and weights
+- \`mapx layers [path] [--json]\` - List files grouped by architectural roles/layers
+- \`mapx check [path] [--layer name] [--rule rule] [--format json]\` - Check the architecture rules in \`.mapx/architecture.jsonc\` (exit 1 on violations)
+- \`mapx arch allowed <from> <to> [--json]\` - Would a dependency between two files, symbols or layers be allowed? (also \`mapx arch layers|which|unassigned|deps|unused|changed\`)
 - \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
-- \`mapx node <symbol> [--dir path] [--source] [--format text|json]\` - Inspect a symbol node with optional source code
-- \`mapx files [--dir path] [--path prefix] [--lang language] [--sort sort] [--limit limit]\` - List and filter files
-- \`mapx lang list\` - List supported languages and status
-- \`mapx lang install <lang>\` - Install dynamic language support
-- \`mapx lang uninstall <lang>\` - Uninstall dynamic language support
+- \`mapx node <symbol> [--dir path] [--source] [--format text|json] [--include-members]\` - Inspect a symbol node with optional source code and member listing
+- \`mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]\` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
+- \`mapx lang list\` - List supported languages, extensions and tiers (all grammars are bundled)
+- \`mapx lang info <lang>\` - Show a language's extensions, file names and grammar files
 - \`mapx serve --dir /path\` - Start stdio MCP server
 - \`mapx serve --sse --port <port>\` - Start SSE (HTTP) MCP server
 - \`mapx ui [--port <port>]\` - Open web dashboard for interactive visualization
 - \`mapx workspaces list\` - List registered repositories
 - \`mapx workspaces add <path>\` - Register a new repository
-- \`mapx workspaces discover\` - Discover unregistered submodules, peers, VS Code folders
-- \`mapx workspaces sync\` - Auto-register discovered repositories
+- \`mapx workspaces discover\` - Discover unregistered submodules, peers, VS Code folders, nested git repos (up to 3 levels deep), and monorepo packages
+- \`mapx workspaces sync\` - Auto-register discovered repositories (prompts for nested git repos and monorepo packages)
 
 ## MCP Tools
 
 When running as an MCP server, MapxGraph exposes these tools:
-- \`mapx_scan\` - Scan the code graph (full scan)
-- \`mapx_sync\` - Sync changed files to update the graph (incremental scan)
+- \`mapx_scan\` - Scan the code graph (full scan; supports \`force\` and \`parallel\` options)
+- \`mapx_sync\` - Sync changed files to update the graph (incremental scan; supports \`parallel\` option)
 - \`mapx_query\` - Search symbols by name pattern
 - \`mapx_search\` - Filtered semantic and regex-like symbol search
-- \`mapx_node\` - Deep inspection of a specific symbol and its source code
-- \`mapx_files\` - List and filter files by path, language, and size or line counts
+- \`mapx_node\` - Deep inspection of a specific symbol and its source code (supports \`include_members\` to list class/interface members)
+- \`mapx_files\` - List and filter files by path prefix or glob pattern, language, and size or line counts
 - \`mapx_dependencies\` - Get deps and reverse-deps for a file
 - \`mapx_callers\` - Direct and nested callers of a symbol
 - \`mapx_callees\` - Direct and nested callees of a symbol
 - \`mapx_trace\` - Trace data flow paths from a starting symbol or file
 - \`mapx_sources\` - Find entry points (sources) in the codebase
-- \`mapx_sinks\` - Find terminal consumers (sinks) in the codebase
+- \`mapx_sinks\` - Find terminal consumers (sinks) in the codebase (supports \`include_leaf_libraries\` to show filtered leaf libraries)
+- \`mapx_routes\` - Show framework routes
+- \`mapx_hooks\` - Show framework hooks
+- \`mapx_edges\` - Granular query of graph dependency edges
 - \`mapx_impact\` - Multi-depth blast radius and change risk analysis for a symbol
 - \`mapx_clusters\` - List code clusters/modules
 - \`mapx_status\` - Check scan status, languages breakdown, top PageRank files/symbols, and index recommendations
+- \`mapx_metrics\` - Compute file coupling and instability metrics
+- \`mapx_profile\` - Retrieve codebase profile (archetype, frameworks, active taxonomy)
+- \`mapx_explain\` - Explain file dynamic role classification and weights
+- \`mapx_smells\` - Detect design smells and architectural violations
+- \`mapx_dsm\` - Generate cluster Dependency Structure Matrix (DSM)
+- \`mapx_layers\` - List files grouped by architectural roles/layers
+- \`mapx_arch_validate_config\` - Validate the architecture rules configuration (.mapx/architecture.jsonc): every problem with its JSON pointer
+- \`mapx_arch_check\` - Check the architecture rules against the index (as \`mapx check\`; filters \`layer\`, \`rule\`, \`file\`, \`since\`)
+- \`mapx_arch_layers\` - The rule layers, a layer's members and the selector that matched, or the elements in no layer
+- \`mapx_arch_allowed\` - Pre-flight: may this file or symbol depend on that one? Rule, reason and alternatives
+- \`mapx_arch_explain\` - Why an element is in a layer, and why a dependency is allowed or a violation
+- \`mapx_arch_init\` - Propose an architecture configuration from the index (writes only with \`write: true\`)
 - \`mapx_export\` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - \`mapx_context\` - Intelligent, token-budgeted workspace context builder
 - \`mapx_workspaces\` - Retrieve workspace configuration and repositories (list/discover)
-- \`mapx_lang_list\` - List supported languages and status
-- \`mapx_lang_install\` - Install dynamic language support
-- \`mapx_lang_uninstall\` - Uninstall dynamic language support
+- \`mapx_lang_list\` - List supported languages, extensions and tiers (all grammars are bundled)
+- \`mapx_lang_info\` - Show a language's extensions, file names and grammar files
+- \`mapx_lang_install\` / \`mapx_lang_uninstall\` - Compatibility no-ops: grammars are bundled, nothing is installed or removed
 - \`mapx_batch\` - Execute multiple operations in a single call (search, node, callers, callees, deps)
+- \`mapx_agents_generate\` - Generate/update agent integration instructions and rules
 
 ## When to Use
 
@@ -238,14 +319,17 @@ When running as an MCP server, MapxGraph exposes these tools:
 7. **Trace data flow / call chains**: Run \`mapx trace <symbol>\`, \`mapx callers\`, or \`mapx callees\`.
 8. **Planning a modification**: Run \`mapx impact\` to determine the blast radius.
 9. **Building custom prompts / context**: Run \`mapx context\` to generate optimal context within a token budget.
-10. **Batch operations**: Use \`mapx_batch\` (MCP) to execute multiple operations in a single round-trip.`
+10. **Batch operations**: Use \`mapx_batch\` (MCP) to execute multiple operations in a single round-trip.
+11. **Adding an import across modules**: Call \`mapx_arch_allowed\` first (see below).
+
+${ARCH_WORKFLOW}`
   },
   claude: {
     filename: 'CLAUDE.md',
     isAppend: false,
     content: `# MapxGraph - Claude Integration Guide
 
-This project is configured with **MapxGraph** for codebase navigation and graph query support across **22 languages**.
+This project is configured with **MapxGraph** for codebase navigation and graph query support across **${LANGUAGE_COUNT} languages**.
 
 ## Claude Desktop Configuration
 
@@ -258,7 +342,7 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
       "command": "npx",
       "args": [
         "-y",
-        "mapx",
+        "${NPM_PACKAGE}",
         "serve",
         "--dir",
         "{{PROJECT_DIR}}"
@@ -268,16 +352,32 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 }
 \`\`\`
 
-## MCP Tools Available (26 total)
+### SSE (HTTP) transport
+
+To share one long-running server between clients, start it with \`mapx serve --sse --port {{MCP_PORT}} --dir {{PROJECT_DIR}}\` and register its URL instead:
+
+\`\`\`json
+{
+  "mcpServers": {
+    "mapx-{{PROJECT_NAME}}": {
+      "type": "sse",
+      "url": "http://localhost:{{MCP_PORT}}/sse"
+    }
+  }
+}
+\`\`\`
+
+## MCP Tools Available (39 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Architecture rules:** \`mapx_arch_allowed\`, \`mapx_arch_check\`, \`mapx_arch_explain\`, \`mapx_arch_layers\`, \`mapx_arch_init\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflows
 
@@ -286,13 +386,16 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 3. Use \`mapx_callers\` / \`mapx_callees\` to trace call chains.
 4. Run \`mapx_impact\` before making changes to understand blast radius.
 5. If files are modified, call \`mapx_sync\` to update the graph.
-6. Call \`mapx_trace\` to trace data flow paths.`
+6. Call \`mapx_trace\` to trace data flow paths.
+7. Before adding an import across modules, call \`mapx_arch_allowed\`.
+
+${ARCH_WORKFLOW}`
   },
   cursor: {
     filename: '.cursor/rules/mapx.mdc',
     isAppend: false,
     content: `---
-description: Rules for using MapxGraph for codebase understanding, symbol search, and data-flow tracing across 22 languages
+description: Rules for using MapxGraph for codebase understanding, symbol search, and data-flow tracing across ${LANGUAGE_COUNT} languages
 globs: ["**/*"]
 alwaysApply: false
 ---
@@ -300,16 +403,17 @@ alwaysApply: false
 
 Use MapxGraph commands or MCP tools to understand code structure.
 
-## Available MCP Tools (26 total)
+## Available MCP Tools (39 total)
 
 **Graph:** \`mapx_scan\`, \`mapx_sync\`
 **Search:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Deps:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Deps:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Architecture rules:** \`mapx_arch_allowed\`, \`mapx_arch_check\`, \`mapx_arch_explain\`, \`mapx_arch_layers\`, \`mapx_arch_init\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\`
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflow
 
@@ -317,16 +421,19 @@ Use MapxGraph commands or MCP tools to understand code structure.
 2. Use \`mapx_search --kind class\` to find specific symbol types.
 3. Run \`mapx_impact\` before refactoring to assess blast radius.
 4. Run \`mapx_sync\` (or \`mapx_scan\`) after file changes.
-5. Query via \`mapx_query\` to navigate symbols.`
+5. Query via \`mapx_query\` to navigate symbols.
+6. Before adding an import across modules, call \`mapx_arch_allowed\`.
+
+${ARCH_WORKFLOW}`
   },
   copilot: {
     filename: '.github/copilot-instructions.md',
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (22 languages, 26 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 39 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
-- \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
 - \`mapx search <term> --format json\` - Structured JSON output with PageRank scores
 - \`mapx deps <file>\` - View file dependencies
@@ -334,12 +441,16 @@ This project uses MapxGraph (22 languages, 26 MCP tools). You can run the follow
 - \`mapx callees <symbol>\` - Trace callees (with fuzzy "Did you mean?" on typos)
 - \`mapx impact <symbol>\` - Change impact analysis
 - \`mapx clusters\` - View logical modules
-- \`mapx trace <symbol>\` - Trace data-flow paths
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` - Trace data-flow paths
 - \`mapx sources\` - Find entry points
-- \`mapx sinks\` - Find terminal consumers
+- \`mapx sinks [--include-leaf-libraries]\` - Find terminal consumers
 - \`mapx context <task>\` - Generate task-specific context
 - \`mapx node <symbol> --source\` - Inspect symbol source code
-- \`mapx node <symbol> --format json\` - Symbol details as JSON`
+- \`mapx node <symbol> --format json\` - Symbol details as JSON
+- \`mapx profile\` - Show codebase profile
+- \`mapx arch\` - Show comprehensive architecture and design smells report
+- \`mapx explain <file>\` - Explain file role classification signals
+- \`mapx layers\` - List files grouped by architectural roles`
   },
   windsurf: {
     filename: '.windsurf/rules/mapx.md',
@@ -349,7 +460,7 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **26 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **${LANGUAGE_COUNT} languages** with **39 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
@@ -362,6 +473,10 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_sinks\` / \`mapx sinks\` to find terminal consumers.
 - \`mapx_context\` / \`mapx context\` to generate task-specific context.
 - \`mapx_batch\` to execute multiple operations in one call.
+- \`mapx_profile\` / \`mapx profile\` to inspect codebase profile.
+- \`mapx_smells\` / \`mapx arch\` to analyze smells and design health.
+- \`mapx_arch_allowed\` / \`mapx arch allowed\` before adding an import across modules: the architecture rules' answer, with alternatives.
+- \`mapx_arch_check\` / \`mapx check\` to check the architecture rules after edits (MCP: pass \`sync: true\`).
 - \`mapx_sync\` / \`mapx sync\` after edits.`
   },
   cline: {
@@ -369,7 +484,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (22 languages, 26 MCP tools).
+This project is indexed by MapxGraph (${LANGUAGE_COUNT} languages, 39 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
@@ -379,29 +494,37 @@ Available tools:
 - \`mapx_trace\` - Trace data-flow paths.
 - \`mapx_sources\` / \`mapx_sinks\` - Find entry points / terminal consumers.
 - \`mapx_context\` - Generate token-budgeted context.
-- \`mapx_batch\` - Batch multiple operations in a single call.`
+- \`mapx_profile\` / \`mapx_smells\` - Profile codebase and audit design quality / code smells.
+- \`mapx_batch\` - Batch multiple operations in a single call.
+- \`mapx_arch_allowed\` - Before adding an import across modules, check that the architecture rules allow it (\`mapx_arch_check\`, \`mapx_arch_explain\` for the rest).`
   },
   aider: {
     filename: 'AIDER.md',
     isAppend: false,
+    companions: ['aider-conf'],
     content: `# MapxGraph Aider Integration
 
-Use MapxGraph commands in this repository to analyze code across **22 languages**.
+Use MapxGraph commands in this repository to analyze code across **${LANGUAGE_COUNT} languages**.
+
+## Loading this file
+
+\`.aider.conf.yml\` lists this file under \`read:\`, so Aider loads it as read-only context on startup.
+To load it by hand instead, run \`aider --read AIDER.md\` (or \`/read-only AIDER.md\` inside a session).
 
 ## Key CLI Commands
 
 - \`mapx export\`: Compact summary of the graph structure.
 - \`mapx export --format=svg -o graph.svg\`: Visual graph export.
-- \`mapx query <symbol>\`: Find locations and definitions (supports glob: \`*Service\`, \`get*\`).
+- \`mapx query <symbol>\`: Find locations and definitions (supports glob: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - \`mapx search <term> --kind class\`: Advanced filtered search (auto-expand, fuzzy fallback).
 - \`mapx search <term> --format json\`: Structured JSON output.
 - \`mapx deps <file>\`: Show dependencies.
 - \`mapx callers <symbol>\`: Show who calls a symbol (fuzzy fallback on typos).
 - \`mapx callees <symbol>\`: Show what a symbol calls (fuzzy fallback on typos).
 - \`mapx impact <symbol>\`: Change impact analysis.
-- \`mapx trace <symbol>\`: Show data-flow traversal.
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\`: Show data-flow traversal or list entry points/sinks.
 - \`mapx sources\`: Find entry points.
-- \`mapx sinks\`: Find terminal consumers.
+- \`mapx sinks [--include-leaf-libraries]\`: Find terminal consumers.
 - \`mapx context <task>\`: Generate task-specific context.
 - \`mapx node <symbol> --source\`: View symbol source code.
 - \`mapx node <symbol> --format json\`: Symbol details as JSON.
@@ -412,66 +535,94 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
     isAppend: false,
     content: `# MapxGraph Gemini Integration
 
-Utilize MapxGraph to obtain codebase context for Gemini across **22 languages**.
+Utilize MapxGraph to obtain codebase context for Gemini across **${LANGUAGE_COUNT} languages** with **39 MCP tools**.
 
 ## CLI Commands
 
 - Run \`mapx export\` to summarize the project (supports --format=llm/json/dot/svg/toon).
-- Run \`mapx query <symbol>\` to locate symbols (supports glob patterns: \`*Service\`, \`get*\`).
+- Run \`mapx query <symbol>\` to locate symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains (fuzzy fallback on typos).
 - Run \`mapx impact <symbol>\` to assess change blast radius.
-- Run \`mapx trace <symbol>\` to analyze data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to analyze data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx node <symbol> --source\` to inspect a symbol's source code.
 - Run \`mapx node <symbol> --format json\` for structured JSON output.
+- Run \`mapx node <symbol> --include-members\` to list class/interface member symbols.
+- Run \`mapx profile\` to show codebase profile details.
+- Run \`mapx arch\` to audit architecture design smells and structural quality.
+- Run \`mapx explain <file>\` to explain file layer/role classification signals.
+- Run \`mapx layers\` to view files grouped by architectural roles.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
+  // Continue loads MCP server blocks from .continue/mcpServers/ and invokable markdown prompts
+  // (slash commands) from .continue/prompts/; it never loaded .continue/mapx.yaml (D014, M0-09-R4).
   continue: {
-    filename: '.continue/mapx.yaml',
+    filename: '.continue/mcpServers/mapx.yaml',
     isAppend: false,
-    content: `# Continue configuration for MapxGraph (22 languages, 26 MCP tools)
-contextProviders:
-  - name: cmd
+    companions: ['continue-impact', 'continue-callers', 'continue-context', 'continue-sync'],
+    legacyFiles: ['.continue/mapx.yaml'],
+    content: `# MapxGraph MCP server for Continue (${LANGUAGE_COUNT} languages, 39 MCP tools)
+name: MapxGraph
+version: '{{MAPX_VERSION}}'
+schema: v1
+mcpServers:
+  - name: mapx
+    command: mapx
     args:
-      name: mapx-export
-      cmd: mapx export --tokens=4000
-  - name: cmd
-    args:
-      name: mapx-status
-      cmd: mapx status
+      - serve
+      - --dir
+      - {{PROJECT_DIR_YAML}}`
+  },
+  'continue-impact': continuePrompt('mapx-impact', 'Blast radius of changing a symbol (mapx impact)',
+    'Run `mapx impact <symbol>` in the terminal, where `<symbol>` is the symbol named after this command, and summarise the affected files by risk.'),
+  'continue-callers': continuePrompt('mapx-callers', 'Who calls a symbol (mapx callers)',
+    'Run `mapx callers <symbol>` in the terminal, where `<symbol>` is the symbol named after this command, and list the call sites.'),
+  'continue-context': continuePrompt('mapx-context', 'Token-budgeted context for a task (mapx context)',
+    'Run `mapx context "<task>"` in the terminal, where `<task>` is the task described after this command, and use its output as context for the task.'),
+  'continue-sync': continuePrompt('mapx-sync', 'Update the graph after edits (mapx sync)',
+    'Run `mapx sync` in the terminal and report what changed.'),
+  'aider-conf': {
+    filename: '.aider.conf.yml',
+    isAppend: true,
+    hidden: true,
+    content: `read:
+  - AIDER.md
 `
   },
   zed: {
     filename: '.zed/mapx-instructions.md',
     isAppend: false,
+    mcpConfigs: ['zed'],
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 26 MCP tools).
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 39 MCP tools).
+\`mapx agents generate --providers zed\` also registers the mapx MCP server under \`context_servers\` in \`.zed/settings.json\`, keeping your other settings.
 
 ## Key Commands
 - Run \`mapx export\` to retrieve a token-budgeted codebase summary.
-- Run \`mapx query <symbol>\` to find definitions (supports glob: \`*Service\`, \`get*\`).
+- Run \`mapx query <symbol>\` to find definitions (supports glob: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
-- Run \`mapx trace <symbol>\` to trace data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to trace data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
   antigravity: {
     filename: '.agents/rules/mapx.md',
     isAppend: false,
+    mcpConfigs: ['antigravity'],
     content: `# MapxGraph Initialization Rule
 
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 26 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (${LANGUAGE_COUNT} languages, 39 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 
@@ -493,6 +644,7 @@ Before editing any symbol (class, function, method, interface):
 1. Call \`mapx_impact\` on the target symbol to assess blast radius and risk score.
 2. Call \`mapx_callers\` to identify all upstream dependents.
 3. If impacted files > 3, call \`mapx_context\` with the affected symbols as seeds to build a token-budgeted context window.
+4. Before adding an import across modules, call \`mapx_arch_allowed\` (see Architecture Rules below).
 
 ## Post-Modification Workflow
 
@@ -501,16 +653,19 @@ After completing file writes:
 1. Call \`mapx_sync\` to re-index modified files.
 2. Verify the updated graph reflects your changes before reporting completion.
 
+${ARCH_WORKFLOW}
+
 ## Available MCP Tools
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Architecture rules:** \`mapx_arch_allowed\`, \`mapx_arch_check\`, \`mapx_arch_explain\`, \`mapx_arch_layers\`, \`mapx_arch_init\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Key Principles
 
@@ -524,7 +679,7 @@ After completing file writes:
     isAppend: false,
     content: `# MapX MCP Server - Agent Instructions Guide
 
-MapX exposes **26** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
+MapX exposes **39** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
 
 ---
 
@@ -534,6 +689,7 @@ MapX exposes **26** Model Context Protocol (MCP) tools that allow AI agents to n
 2. **Before Searching or Querying**: If you or the user made any code changes, run \`mapx_sync\` first to incrementally update the graph index.
 3. **Smart Context Building**: Call \`mapx_context\` to automatically build a token-efficient context of relevant files and dependencies for a specific task.
 4. **Batch Operations**: Use \`mapx_batch\` to execute multiple operations (search, node, callers, callees, deps) in a single round-trip call.
+5. **Before adding an import across modules**: Call \`mapx_arch_allowed\` (see Architecture Rules below).
 
 ---
 
@@ -567,12 +723,13 @@ Searches for code symbols with glob pattern support and fuzzy error recovery.
 ### 3. \`mapx_query\` (Quick Symbol Search)
 Simpler search by name pattern. Supports the same glob patterns as \`mapx_search\` but without filters.
 - **Parameters**:
-  - \`term\` (string): Search query with optional glob patterns.
+  - \`term\` (string): Search query with optional glob patterns. Supports flexible namespace notations (e.g. \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 
 ### 4. \`mapx_node\` (Symbol Details & Source Extraction)
 Fetches metadata for a single symbol (file path, line range, signature) and can optionally extract the exact source code.
 - Set \`source: true\` to view the symbol's implementation.
 - Set \`format: "json"\` for structured JSON output.
+- Set \`include_members: true\` to list class/interface/trait member symbols (methods, properties).
 - Shows related symbols: callers, callees, and sibling symbols in the same file.
 - **Fuzzy fallback**: Suggests similar names if symbol not found.
 
@@ -596,9 +753,14 @@ Checks indexing state, language counts, top files/symbols, and Git status.
 ### 7. \`mapx_sync\` (Incremental Indexing)
 Scans only modified/new files since the last scan and updates the graph index. Fast and efficient.
 - Call this immediately after modifying files.
+- **Optional parameters**:
+  - \`parallel\` (boolean): Enable parallel parsing via worker threads (default: true).
 
 ### 8. \`mapx_scan\` (Full Indexing)
 Performs a full clean re-scan of the codebase. Use only for major structural updates.
+- **Optional parameters**:
+  - \`force\` (boolean): Force re-parsing of all files (bypass cache).
+  - \`parallel\` (boolean): Enable parallel parsing via worker threads (default: true).
 
 ### 9. \`mapx_impact\` (Change Impact Analysis)
 Traces transitive callers of a symbol up to a certain depth and grades the change risk (\`HIGH\`, \`MEDIUM\`, or \`LOW\`).
@@ -618,16 +780,38 @@ Follows data-bearing edges forward/backward through the graph to trace data prop
 ### 12. \`mapx_dependencies\` / \`mapx_sources\` / \`mapx_sinks\`
 - \`mapx_dependencies\`: Get deps and reverse-deps for a file.
 - \`mapx_sources\`: Find entry points (data sources) in the codebase.
-- \`mapx_sinks\`: Find terminal consumers (data sinks) in the codebase.
+- \`mapx_sinks\`: Find terminal consumers (sinks) in the codebase. Set \`include_leaf_libraries: true\` to include high-import leaf libraries normally filtered out.
 
 ### 13. \`mapx_files\` / \`mapx_clusters\` / \`mapx_export\` / \`mapx_workspaces\`
-- \`mapx_files\`: List and filter files by path, language, and size or line counts.
-- \`mapx_clusters\`: List code clusters/modules.
+- \`mapx_files\`: List and filter files by path prefix or glob pattern, language, and size or line counts.
+- \`mapx_clusters\`: List code clusters/modules (supports \`source\` filter).
 - \`mapx_export\`: Export compact graph summary (formats: llm, json, dot, svg, toon).
 - \`mapx_workspaces\`: Retrieve workspace configuration and repositories (list/discover).
 
-### 14. \`mapx_lang_list\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
-Manage supported languages and dynamic grammar installation.
+### 14. \`mapx_lang_list\` / \`mapx_lang_info\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
+List supported languages and show a language's extensions, file names and grammar files. Every grammar is bundled, so \`mapx_lang_install\` and \`mapx_lang_uninstall\` only report that nothing needs installing or removing.
+
+### 15. \`mapx_routes\` / \`mapx_hooks\` / \`mapx_edges\` / \`mapx_metrics\`
+- \`mapx_routes\`: List HTTP routes parsed from controllers.
+- \`mapx_hooks\`: List framework hooks and lifecycle bindings.
+- \`mapx_edges\`: Granular graph dependency edges query.
+- \`mapx_metrics\`: Get coupling and instability metrics for codebase files.
+
+### 16. \`mapx_profile\` / \`mapx_explain\` / \`mapx_smells\` / \`mapx_dsm\` / \`mapx_layers\`
+- \`mapx_profile\`: Retrieve high-level codebase profile (archetype, patterns, active taxonomy).
+- \`mapx_explain\`: View detailed signal weights for a file's architectural role classification.
+- \`mapx_smells\`: Run architectural and design smell detection audit.
+- \`mapx_dsm\`: Generate the cluster Dependency Structure Matrix (DSM) matrix.
+- \`mapx_layers\`: List project files grouped by their dynamically classified architectural roles.
+- \`mapx_arch_validate_config\`: Validate \`.mapx/architecture.jsonc\` (or a \`view\`) as \`mapx arch validate-config\` does; every problem with its file and JSON pointer.
+
+### 17. \`mapx_arch_check\` / \`mapx_arch_layers\` / \`mapx_arch_allowed\` / \`mapx_arch_explain\` / \`mapx_arch_init\`
+The architecture rules of \`.mapx/architecture.jsonc\`, answered as \`mapx check\` and \`mapx arch …\` answer them. JSON by default; lists are capped (\`limit\`) with their totals. A failure is a tool error whose JSON has \`exitCode\` 3 (configuration or usage) or 4 (missing or stale index: pass \`sync: true\`).
+- \`mapx_arch_check\`: the report, with \`exitCode\` (1 for violations). Filters: \`layer\`, \`rule\`, \`file\` (prefix or glob), \`since\` (git ref).
+- \`mapx_arch_layers\`: the layers; with \`layer\`, its members (\`why\` names the selector); with \`unassigned: true\`, the elements in no layer.
+- \`mapx_arch_allowed\`: \`from\`, \`to\` (a layer \`Domain\`, a file \`src/domain/Order.ts\`, a symbol \`Order::total\`, a package \`npm:express\` or \`express\`, or a built-in \`node:fs\`), optional \`type\`. Returns \`allowed\`, \`rule\`, \`reason\`, \`decisions\`, \`allowedLayers\` and \`alternatives\`.
+- \`mapx_arch_explain\`: \`element\`, optional \`layer\` and \`to\`: the selector trace and the rule trace.
+- \`mapx_arch_init\`: a proposed configuration from MapX roles, clusters (\`from\`) or a preset (\`preset\`: laravel, symfony, nestjs, express, django, fastapi, rails, spring, aspnet, flutter, nextjs, vue, layered, clean, hexagonal, onion, ddd-contexts, mvc, mvvm, feature-sliced), optionally with a \`baseline\` of today's violations; it writes only with \`write: true\`, never over an existing file unless \`force: true\`.
 
 ---
 
@@ -642,6 +826,8 @@ Manage supported languages and dynamic grammar installation.
 
 ### Scenario: Batch investigation
 1. Use \`mapx_batch\` to search for multiple symbol patterns and fetch their details in one call.
-2. Review results, then use \`mapx_callers\` to trace upstream dependents.`
+2. Review results, then use \`mapx_callers\` to trace upstream dependents.
+
+${ARCH_WORKFLOW.replace('## Architecture Rules', '### Scenario: Architecture rules')}`
   }
 };

@@ -1,5 +1,7 @@
 # Iteration Log
 
+> **Frozen 2026-10-30.** Superseded by [`docs/baton/TASKS.json`](../docs/baton/TASKS.json); I01–I22 are M0-01 … M0-22 there. Several statuses below were contradicted by the per-iteration files; see `docs/baton/reviews/REVIEW-2026-10-30-baseline.md`.
+
 Chronological record of all iterations: when they were started, completed, what was in scope, and what changed mid-flight.
 
 ---

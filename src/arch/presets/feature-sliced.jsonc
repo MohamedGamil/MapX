@@ -1,0 +1,33 @@
+// mapx:preset/feature-sliced: Feature-Sliced Design for frontends.
+// AR-15. Strict top-down order: a layer may depend on every layer below it, never on one above.
+// (FSD's other rule, no imports between slices of one layer, needs a layer per slice: declare
+// those to enforce it.)
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // Application setup: providers, routing, global styles.
+    { "name": "App", "selectors": [{ "path": "%root%app/**" }] },
+    // Complex scenarios across pages (deprecated in FSD 2, kept for older code).
+    { "name": "Processes", "selectors": [{ "path": "%root%processes/**" }] },
+    // Full pages.
+    { "name": "Pages", "selectors": [{ "path": "%root%pages/**" }] },
+    // Self-contained blocks of a page.
+    { "name": "Widgets", "selectors": [{ "path": "%root%widgets/**" }] },
+    // User interactions that bring business value.
+    { "name": "Features", "selectors": [{ "path": "%root%features/**" }] },
+    // Business entities.
+    { "name": "Entities", "selectors": [{ "path": "%root%entities/**" }] },
+    // Reusable code with no business logic: UI kit, helpers, API client.
+    { "name": "Shared", "selectors": [{ "path": "%root%shared/**" }] }
+  ],
+  "rules": {
+    "App": ["Processes", "Pages", "Widgets", "Features", "Entities", "Shared"],
+    "Processes": ["Pages", "Widgets", "Features", "Entities", "Shared"],
+    "Pages": ["Widgets", "Features", "Entities", "Shared"],
+    "Widgets": ["Features", "Entities", "Shared"],
+    "Features": ["Entities", "Shared"],
+    "Entities": ["Shared"],
+    "Shared": []
+  }
+}

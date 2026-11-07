@@ -86,3 +86,49 @@ For best accuracy, run `mapx init && mapx scan` on the target project first — 
 | `benchmarks/run.ts` | CLI runner — collects data, runs scenarios, generates report |
 | `benchmarks/scenarios.ts` | 6 scenario definitions with baseline vs MapX token models |
 | `benchmarks/token-counter.ts` | Token estimation + pricing utilities |
+
+## Accuracy scoring (fixtures)
+
+Separately from token savings, MapX measures its own extraction accuracy on three labelled synthetic fixtures:
+
+| Scorer | Fixture | Measures |
+| --- | --- | --- |
+| `scripts/eval/score-routes.ts` | `tests/fixtures/laravel-routes` | Laravel route URI, handler and attribute recall, precision, false positives |
+| `scripts/eval/score-http.ts` | `tests/fixtures/vue-http` | HTTP call-site and URL recall, frontend → backend pairing recall and precision |
+| `scripts/eval/score-edges.ts` | `tests/fixtures/vue-sfc` | Vue SFC edge and symbol recall per pattern, precision, false positives on negatives |
+| `scripts/eval/score-arch.ts` | `tests/fixtures/arch-rules` | Architecture-rule findings (violation, skipped, uncovered, warning, error) per kind: recall and precision against `expected-findings.json`. Findings on `allowed` and same-layer rows are false positives. Five apps (PHP, TypeScript, Python, Go, a PHP copy with a `+` cycle), a two-repo workspace, and four vendor apps (M5-24: npm, Composer, pypi, Go). Findings on packages outside the workspace are also scored per ecosystem (`externalFindings`: uncovered, vendor-confinement and dev-dependency rows). Smells (M5-16-R1) are scored from `expected-smells.json`, a separate block of labels, each row citing the source or configuration line that makes it true: per smell kind (`smells` in `--json`), recall and precision over the apps whose labels are complete for that kind (`complete`), ten kinds in all. The smell-only app `ts-smells` (listed under `apps` in that file, not in `expected-findings.json`) carries the positives for `vendor-leak`, `layer-skip`, `deprecated-usage` and `orphan-element`. The floor is 1.0 on the labelled rows and the command enforces it: a missed row or a smell of a complete kind with no row is a failure (exit 1), with or without `--min-recall` and `--min-precision`. Not scored: `dead-allowance`, `weak-allowance`, `unstable-layer-dependency` and `abstractness-distance`, which need per-edge counts. The scorer is not in `npm run eval`, so `floors.json` has no entry for it; the registered command and `tests/arch-fixture.test.ts` hold the floor |
+
+The floors each score must hold are recorded in `scripts/eval/floors.json`. The fixture tests read the same file. `npm run eval` runs all three scorers and checks every floor. CI runs it as the `Eval` job.
+
+```bash
+npm run eval                          # table per scorer; exit 1 when a floor is missed
+npm run eval -- --json                # machine-readable result
+npm run eval -- --floors my.json      # check another floors file
+```
+
+In `floors.json`:
+- `fixture` is the fixture directory, relative to the repository root.
+- `min` and `max` bound a scorer's totals.
+- `patterns` bounds each labelled pattern. `"*"` applies to every pattern, and a named pattern overrides it metric by metric.
+
+A floors file naming an unknown scorer, metric or pattern, or a recall or precision outside [0, 1], is rejected with exit 2 before anything is scanned. A scan that fails also exits 2, after the other scorers have reported. Floors only rise: when a change improves a score, raise its floor in the same change.
+
+## Dashboard browser tests
+
+`npm run test:ui` runs the dashboard in headless Chromium (Playwright, `playwright.config.ts`). It builds the dashboard, scans generated fixture workspaces with the source CLI, serves each with `mapx ui` on a free port, and drives it:
+
+| Spec | Checks |
+| --- | --- |
+| `tests/ui/smoke.spec.ts` | Every tab renders its content: the graph's layout finishes, symbols and routes fill their tables, the architecture profile and DSM appear, a context build returns files, metrics fill, and a logged tool call shows. No tab may log a console error or page error, or get a failed `/api` request. |
+| `tests/ui/perf.spec.ts` | The time from navigation to the first finished graph layout on the generated 500-file fixture. The median of three cold loads must stay within the budget in `tests/ui/budgets.json`: the M4-16 baseline (720 ms) plus 20%. |
+
+The dashboard marks its graph state on `<body data-graph>` (`loading`, `layout`, `ready`, `empty`, `error`) and records a `mapx:graph-ready` performance mark each time a layout finishes. The tests wait on these instead of on fixed delays.
+
+```bash
+npx playwright install chromium            # once; without it the specs skip and say so
+npm run test:ui                            # all specs
+npm run test:ui -- smoke                   # one spec
+MAPX_UI_PERF_SCALE=2 npm run test:ui       # double the render budget on slower hardware
+```
+
+CI runs them as the `UI` job, with `MAPX_UI_PERF_SCALE=2` because shared runners are slower than the machine the baseline was measured on. `npx tsx scripts/ui/audit.ts` is the fuller audit behind the baseline: screenshots at three widths, axe accessibility results and Full Codebase timings (M4-16, `docs/research/dashboard-ux-audit.md`).

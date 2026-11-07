@@ -1,0 +1,9 @@
+// M5-22-R1 fixture: legacy Poetry attribution (dev-dependencies, lock 1.x categories). Two layers and no cross-layer dependency, so the app yields no finding; its value is the external references it labels (expected-externals.json).
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "app/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "app/infrastructure/**" }] }
+  ],
+  "rules": { "Domain": [], "Infrastructure": ["Domain"] }
+}

@@ -1,0 +1,21 @@
+// Synthetic (M5-02-R1): parameters in path (glob and regex) and in the other string selector keys.
+{
+  "parameters": {
+    "Src": "src",
+    "Ns": "Shop",
+    "Vendor": "acme",
+    "Backend": "api",
+    "Cluster": "billing",
+    "Pkg": "@acme/core",
+    "Role": "controller",
+    "Lang": "php",
+    "Base": "Model",
+    "Tag": "@api"
+  },
+  "layers": [
+    { "name": "Paths", "selectors": [{ "path": "%Src%/http/**" }, { "path": "/^%Src%\\/jobs\\//" }] },
+    { "name": "Names", "selectors": [{ "name": "^%Ns%\\\\Domain\\\\" }, { "package": "%Vendor%/*" }] },
+    { "name": "Places", "selectors": [{ "repo": "%Backend%" }, { "cluster": "%Cluster%" }, { "workspacePackage": "%Pkg%" }] },
+    { "name": "Kinds", "selectors": [{ "role": "%Role%", "confidence": 0.5 }, { "language": "%Lang%" }, { "extends": "%Base%" }, { "docTag": "%Tag%" }] }
+  ]
+}

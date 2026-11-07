@@ -11,7 +11,8 @@ if (isImplicitMcp) {
 } else {
   const program = buildCLI();
   program.parseAsync(process.argv).catch((err: Error) => {
-    if (err.message.includes('Another scan is already running')) {
+    // Errors a user fixes from the message alone: no stack trace (M0-10-R6).
+    if (err.message.includes('Another scan is already running') || err.message.startsWith('Unknown repo "')) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
     }

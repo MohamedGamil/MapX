@@ -1,0 +1,1264 @@
+{
+  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden (must be reported with this handler and flagged overridden), unreachable (must be reported, with this handler when one is given, and flagged unreachable; never live), absent (must not be reported at all: route code inside comments, strings and heredocs, or a file under a prefix that never mounts it). Optional name, domain and dynamic on a live or conditional label must equal the reported route's name, domain and dynamic flag.",
+  "labels": [
+    {
+      "id": "L01",
+      "pattern": "class-array",
+      "method": "GET",
+      "uri": "",
+      "handler": "HomeController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L02",
+      "pattern": "closure",
+      "method": "GET",
+      "uri": "about",
+      "handler": null,
+      "expect": "live"
+    },
+    {
+      "id": "L03",
+      "pattern": "uses-array",
+      "method": "GET",
+      "uri": "api/legacy/items",
+      "handler": "ItemController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L04",
+      "pattern": "uses-array",
+      "method": "POST",
+      "uri": "api/legacy/items",
+      "handler": "ItemController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L05",
+      "pattern": "string-handler",
+      "method": "GET",
+      "uri": "api/legacy/items/{id}",
+      "handler": "ItemController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L06",
+      "pattern": "class-array",
+      "method": "GET",
+      "uri": "api/posts",
+      "handler": "PostController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L07",
+      "pattern": "match",
+      "method": "GET",
+      "uri": "api/posts/search",
+      "handler": "PostController@search",
+      "expect": "live"
+    },
+    {
+      "id": "L08",
+      "pattern": "match",
+      "method": "POST",
+      "uri": "api/posts/search",
+      "handler": "PostController@search",
+      "expect": "live"
+    },
+    {
+      "id": "L09",
+      "pattern": "controller-group",
+      "method": "GET",
+      "uri": "api/tags",
+      "handler": "TagController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L10",
+      "pattern": "controller-group",
+      "method": "GET",
+      "uri": "api/tags/{tag}",
+      "handler": "TagController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L11",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories",
+      "handler": "CategoryController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L12",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/create",
+      "handler": "CategoryController@create",
+      "expect": "live"
+    },
+    {
+      "id": "L13",
+      "pattern": "resource",
+      "method": "POST",
+      "uri": "api/blog-categories",
+      "handler": "CategoryController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L14",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L15",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/{blog_category}/edit",
+      "handler": "CategoryController@edit",
+      "expect": "live"
+    },
+    {
+      "id": "L16",
+      "pattern": "resource",
+      "method": "PUT",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L17",
+      "pattern": "resource",
+      "method": "PATCH",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L18",
+      "pattern": "resource",
+      "method": "DELETE",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L19",
+      "pattern": "api-resource",
+      "method": "GET",
+      "uri": "api/statuses",
+      "handler": "StatusController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L20",
+      "pattern": "api-resource",
+      "method": "POST",
+      "uri": "api/statuses",
+      "handler": "StatusController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L21",
+      "pattern": "api-resource",
+      "method": "GET",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L22",
+      "pattern": "api-resource",
+      "method": "PUT",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L23",
+      "pattern": "api-resource",
+      "method": "PATCH",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L24",
+      "pattern": "api-resource",
+      "method": "DELETE",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L25",
+      "pattern": "dynamic-path",
+      "method": "GET",
+      "uri": "api/notices/latest",
+      "handler": "NoticeController@latest",
+      "expect": "live"
+    },
+    {
+      "id": "L26",
+      "pattern": "closure",
+      "method": "GET",
+      "uri": "api/health",
+      "handler": null,
+      "expect": "live"
+    },
+    {
+      "id": "L27",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/users",
+      "handler": "UserController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L28",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/people",
+      "handler": "PersonController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L29",
+      "pattern": "require-mount",
+      "method": "POST",
+      "uri": "api/v1/people",
+      "handler": "PersonController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L30",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L31",
+      "pattern": "require-mount",
+      "method": "PUT",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L32",
+      "pattern": "require-mount",
+      "method": "PATCH",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L33",
+      "pattern": "require-mount",
+      "method": "DELETE",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L34",
+      "pattern": "overridden",
+      "method": "GET",
+      "uri": "api/dup",
+      "handler": "PostController@oldDup",
+      "expect": "overridden",
+      "note": "routes/api/late.php registers GET api/dup later"
+    },
+    {
+      "id": "L35",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/dup",
+      "handler": "PostController@newDup",
+      "expect": "live"
+    },
+    {
+      "id": "L36",
+      "pattern": "conditional",
+      "method": "GET",
+      "uri": "api/beta/feature",
+      "handler": "BetaController@show",
+      "expect": "conditional"
+    },
+    {
+      "id": "L37",
+      "pattern": "unmounted",
+      "method": "GET",
+      "uri": "ghost",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L38",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "api/billing/v1/invoices",
+      "handler": "InvoiceController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L39",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "api/billing/v1/invoices/{invoice}",
+      "handler": "InvoiceController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L40",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "shop/products",
+      "handler": "ProductController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L41",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "shop/products/{product}",
+      "handler": "ProductController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L42",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/{locale}/dashboard",
+      "handler": "HomeController@dashboard",
+      "expect": "live"
+    },
+    {
+      "id": "L43",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-locale",
+      "handler": "HomeController@afterLocale",
+      "expect": "live"
+    },
+    {
+      "id": "L44",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/secure",
+      "handler": "HomeController@secure",
+      "expect": "live"
+    },
+    {
+      "id": "L45",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-glob",
+      "handler": "HomeController@afterGlob",
+      "expect": "live"
+    },
+    {
+      "id": "L46",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-url",
+      "handler": "HomeController@afterUrl",
+      "expect": "live"
+    },
+    {
+      "id": "L47",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/csv",
+      "handler": "HomeController@csv",
+      "expect": "live"
+    },
+    {
+      "id": "L48",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/hash-commented",
+      "handler": "GhostController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L49",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/slash-commented",
+      "handler": "GhostController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L50",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/block-commented",
+      "handler": "GhostController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L51",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/in-string",
+      "handler": "GhostController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L52",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/in-heredoc",
+      "handler": "GhostController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L53",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/v2/reports",
+      "handler": "ReportController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L54",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/after-arrow",
+      "handler": "HomeController@afterArrow",
+      "expect": "live"
+    },
+    {
+      "id": "L55",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/inline/ping",
+      "handler": "HomeController@ping",
+      "expect": "live"
+    },
+    {
+      "id": "L56",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/after-inline",
+      "handler": "HomeController@afterInline",
+      "expect": "live"
+    },
+    {
+      "id": "L57",
+      "pattern": "legacy-group-mount",
+      "method": "GET",
+      "uri": "api/archive/entries",
+      "handler": "ReportController@archive",
+      "expect": "live"
+    },
+    {
+      "id": "L58",
+      "pattern": "legacy-group-mount",
+      "method": "GET",
+      "uri": "api/after-legacy",
+      "handler": "HomeController@afterLegacy",
+      "expect": "live"
+    },
+    {
+      "id": "L59",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/daily",
+      "handler": "HomeController@daily",
+      "expect": "live"
+    },
+    {
+      "id": "L60",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/weekly",
+      "handler": "HomeController@weekly",
+      "expect": "live"
+    },
+    {
+      "id": "L61",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/monthly",
+      "handler": "HomeController@monthly",
+      "expect": "live"
+    },
+    {
+      "id": "L62",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/yearly",
+      "handler": "HomeController@yearly",
+      "expect": "live"
+    },
+    {
+      "id": "L63",
+      "pattern": "rsp-mount",
+      "method": "GET",
+      "uri": "admin/panel",
+      "handler": "HomeController@adminPanel",
+      "expect": "live"
+    },
+    {
+      "id": "L64",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "page",
+      "handler": "HomeController@legacyPage",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L65",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "page",
+      "handler": "HomeController@oldPage",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L66",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "legacy/page",
+      "handler": "HomeController@legacyPage",
+      "expect": "absent"
+    },
+    {
+      "id": "L67",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "old/page",
+      "handler": "HomeController@oldPage",
+      "expect": "absent"
+    },
+    {
+      "id": "L68",
+      "pattern": "then-mount",
+      "method": "POST",
+      "uri": "webhooks/stripe",
+      "handler": "WebhookController@stripe",
+      "expect": "live"
+    },
+    {
+      "id": "L69",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/alpha",
+      "handler": "HomeController@alpha",
+      "expect": "live"
+    },
+    {
+      "id": "L70",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/beta-module",
+      "handler": "HomeController@betaModule",
+      "expect": "live"
+    },
+    {
+      "id": "L71",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/extra/tools",
+      "handler": "HomeController@tools",
+      "expect": "live"
+    },
+    {
+      "id": "L72",
+      "pattern": "separator-mount",
+      "method": "GET",
+      "uri": "api/separator",
+      "handler": "HomeController@separator",
+      "expect": "live"
+    },
+    {
+      "id": "L73",
+      "pattern": "module-path",
+      "method": "GET",
+      "uri": "api/blog/posts",
+      "handler": "BlogPostController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L74",
+      "pattern": "braceless-if",
+      "method": "GET",
+      "uri": "api/exports",
+      "handler": "HomeController@exports",
+      "expect": "conditional"
+    },
+    {
+      "id": "L75",
+      "pattern": "braceless-if",
+      "method": "GET",
+      "uri": "api/after-exports",
+      "handler": "HomeController@afterExports",
+      "expect": "live"
+    },
+    {
+      "id": "L76",
+      "pattern": "unmounted-entry",
+      "method": "GET",
+      "uri": "commented-entry",
+      "handler": "HomeController@commentedEntry",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L77",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/photos",
+      "handler": "PhotoController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L78",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/photos/{picture}",
+      "handler": "PhotoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L79",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/videos",
+      "handler": "VideoController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L80",
+      "pattern": "resource-options",
+      "method": "POST",
+      "uri": "api/videos",
+      "handler": "VideoController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L81",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L82",
+      "pattern": "resource-excluded",
+      "method": "GET",
+      "uri": "api/photos/create",
+      "handler": "PhotoController@create",
+      "expect": "absent"
+    },
+    {
+      "id": "L83",
+      "pattern": "resource-excluded",
+      "method": "POST",
+      "uri": "api/photos",
+      "handler": "PhotoController@store",
+      "expect": "absent"
+    },
+    {
+      "id": "L84",
+      "pattern": "resource-excluded",
+      "method": "PUT",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@update",
+      "expect": "absent"
+    },
+    {
+      "id": "L85",
+      "pattern": "resource-excluded",
+      "method": "DELETE",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@destroy",
+      "expect": "absent"
+    },
+    {
+      "id": "L86",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/tracks",
+      "handler": "TrackController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L87",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/tracks/{track}",
+      "handler": "TrackController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L88",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/reviews",
+      "handler": "ReviewController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L89",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/reviews/{review}",
+      "handler": "ReviewController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L90",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums.tracks",
+      "handler": "TrackController@index",
+      "expect": "absent"
+    },
+    {
+      "id": "L91",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums.reviews",
+      "handler": "ReviewController@index",
+      "expect": "absent"
+    },
+    {
+      "id": "L92",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums/{album}/reviews/{review}",
+      "handler": "ReviewController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L93",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/tickets",
+      "handler": "TicketController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L94",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/badges",
+      "handler": "BadgeController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L95",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/coupons/{coupon}",
+      "handler": "CouponController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L96",
+      "pattern": "action-array",
+      "method": "GET",
+      "uri": "api/guarded",
+      "handler": "HomeController@guarded",
+      "expect": "live"
+    },
+    {
+      "id": "L97",
+      "pattern": "action-array",
+      "method": "GET",
+      "uri": "api/named-closure",
+      "handler": null,
+      "expect": "live"
+    },
+    {
+      "id": "L98",
+      "pattern": "singleton",
+      "method": "GET",
+      "uri": "api/profile",
+      "handler": "ProfileController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L99",
+      "pattern": "singleton",
+      "method": "PUT",
+      "uri": "api/profile",
+      "handler": "ProfileController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L100",
+      "pattern": "singleton",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L101",
+      "pattern": "singleton",
+      "method": "POST",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L102",
+      "pattern": "singleton",
+      "method": "DELETE",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L103",
+      "pattern": "singleton",
+      "method": "PATCH",
+      "uri": "api/profile",
+      "handler": "ProfileController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L104",
+      "pattern": "singleton",
+      "method": "PUT",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L105",
+      "pattern": "singleton",
+      "method": "PATCH",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L106",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/profile/edit",
+      "handler": "ProfileController@edit",
+      "expect": "absent"
+    },
+    {
+      "id": "L107",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo/create",
+      "handler": "LogoController@create",
+      "expect": "absent"
+    },
+    {
+      "id": "L108",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo/{logo}",
+      "handler": "LogoController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L109",
+      "pattern": "route-prefix",
+      "method": "GET",
+      "uri": "v3/api/status",
+      "handler": "HomeController@status",
+      "expect": "live"
+    },
+    {
+      "id": "L110",
+      "pattern": "route-prefix",
+      "method": "GET",
+      "uri": "lead/api/chained",
+      "handler": "HomeController@chained",
+      "expect": "live"
+    },
+    {
+      "id": "L111",
+      "pattern": "route-prefix-wrong",
+      "method": "GET",
+      "uri": "api/v3/status",
+      "handler": "HomeController@status",
+      "expect": "absent"
+    },
+    {
+      "id": "L112",
+      "pattern": "route-prefix-wrong",
+      "method": "GET",
+      "uri": "api/lead/chained",
+      "handler": "HomeController@chained",
+      "expect": "absent"
+    },
+    {
+      "id": "L113",
+      "pattern": "binding-field",
+      "method": "GET",
+      "uri": "api/articles/{article}",
+      "handler": "HomeController@article",
+      "expect": "live"
+    },
+    {
+      "id": "L114",
+      "pattern": "binding-field",
+      "method": "GET",
+      "uri": "api/authors/{author}/books/{book}",
+      "handler": "HomeController@book",
+      "expect": "live"
+    },
+    {
+      "id": "L115",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "mail/inbox",
+      "handler": "HomeController@inbox",
+      "expect": "live"
+    },
+    {
+      "id": "L116",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "mail/outbox",
+      "handler": "HomeController@outbox",
+      "expect": "live"
+    },
+    {
+      "id": "L117",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "notes",
+      "handler": "HomeController@notes",
+      "expect": "live"
+    },
+    {
+      "id": "L118",
+      "pattern": "rsp-require",
+      "method": "GET",
+      "uri": "required",
+      "handler": "HomeController@required",
+      "expect": "live"
+    },
+    {
+      "id": "L119",
+      "pattern": "rsp-load-routes-from",
+      "method": "GET",
+      "uri": "loaded",
+      "handler": "HomeController@loaded",
+      "expect": "live"
+    },
+    {
+      "id": "L120",
+      "pattern": "rsp-variable-mount",
+      "method": "GET",
+      "uri": "var/page",
+      "handler": "HomeController@variablePage",
+      "expect": "live"
+    },
+    {
+      "id": "L121",
+      "pattern": "rsp-dynamic-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/settings",
+      "handler": "HomeController@settings",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L122",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "config('app.api_prefix')/settings",
+      "handler": "HomeController@settings",
+      "expect": "absent"
+    },
+    {
+      "id": "L123",
+      "pattern": "rsp-property-prefix",
+      "method": "GET",
+      "uri": "ops/v3/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "live",
+      "name": "ops.status",
+      "domain": "ops.example.com"
+    },
+    {
+      "id": "L124",
+      "pattern": "rsp-property-prefix",
+      "method": "GET",
+      "uri": "audit/v3/log",
+      "handler": "HomeController@auditLog",
+      "expect": "live"
+    },
+    {
+      "id": "L125",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "ops/{$this->version}/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "absent"
+    },
+    {
+      "id": "L126",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "ops/{dynamic}/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "absent"
+    },
+    {
+      "id": "L127",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "audit/$this->version/log",
+      "handler": "HomeController@auditLog",
+      "expect": "absent"
+    },
+    {
+      "id": "L128",
+      "pattern": "require-once",
+      "method": "GET",
+      "uri": "api/once-a/shared",
+      "handler": "HomeController@onceShared",
+      "expect": "live"
+    },
+    {
+      "id": "L129",
+      "pattern": "require-once-wrong",
+      "method": "GET",
+      "uri": "api/once-b/shared",
+      "handler": "HomeController@onceShared",
+      "expect": "absent"
+    },
+    {
+      "id": "L130",
+      "pattern": "require-cycle",
+      "method": "GET",
+      "uri": "api/cycle-a",
+      "handler": "HomeController@cycleA",
+      "expect": "live"
+    },
+    {
+      "id": "L131",
+      "pattern": "require-cycle",
+      "method": "GET",
+      "uri": "api/cycle-b",
+      "handler": "HomeController@cycleB",
+      "expect": "live"
+    },
+    {
+      "id": "L132",
+      "pattern": "trailing-slash-overridden",
+      "method": "GET",
+      "uri": "api/home",
+      "handler": "HomeController@homeOld",
+      "expect": "overridden"
+    },
+    {
+      "id": "L133",
+      "pattern": "trailing-slash",
+      "method": "GET",
+      "uri": "api/home",
+      "handler": "HomeController@homeNew",
+      "expect": "live"
+    },
+    {
+      "id": "L134",
+      "pattern": "invokable",
+      "method": "GET",
+      "uri": "api/invokable",
+      "handler": "ShowProfile@__invoke",
+      "expect": "live"
+    },
+    {
+      "id": "L135",
+      "pattern": "match",
+      "method": "GET",
+      "uri": "api/feeds",
+      "handler": "HomeController@feeds",
+      "expect": "live"
+    },
+    {
+      "id": "L136",
+      "pattern": "match",
+      "method": "POST",
+      "uri": "api/feeds",
+      "handler": "HomeController@feeds",
+      "expect": "live"
+    },
+    {
+      "id": "L137",
+      "pattern": "dynamic-resource",
+      "method": "GET",
+      "uri": "api/gallery/{dynamic}",
+      "handler": "GalleryController@index",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L138",
+      "pattern": "dynamic-resource",
+      "method": "GET",
+      "uri": "api/gallery/{dynamic}/{dynamic}",
+      "handler": "GalleryController@show",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L139",
+      "pattern": "rsp-compound-assignment",
+      "method": "GET",
+      "uri": "area/v1/plan",
+      "handler": "HomeController@areaPlan",
+      "expect": "live"
+    },
+    {
+      "id": "L140",
+      "pattern": "rsp-compound-assignment-wrong",
+      "method": "GET",
+      "uri": "area/plan",
+      "handler": "HomeController@areaPlan",
+      "expect": "absent"
+    },
+    {
+      "id": "L141",
+      "pattern": "rsp-compound-assignment",
+      "method": "GET",
+      "uri": "gold/perks",
+      "handler": "HomeController@tierPerks",
+      "expect": "live"
+    },
+    {
+      "id": "L142",
+      "pattern": "rsp-compound-assignment-wrong",
+      "method": "GET",
+      "uri": "{dynamic}/perks",
+      "handler": "HomeController@tierPerks",
+      "expect": "absent"
+    },
+    {
+      "id": "L143",
+      "pattern": "rsp-property-assignment",
+      "method": "GET",
+      "uri": "e2/notes",
+      "handler": "HomeController@editionNotes",
+      "expect": "live"
+    },
+    {
+      "id": "L144",
+      "pattern": "rsp-property-assignment-wrong",
+      "method": "GET",
+      "uri": "e1/notes",
+      "handler": "HomeController@editionNotes",
+      "expect": "absent"
+    },
+    {
+      "id": "L145",
+      "pattern": "rsp-partly-dynamic",
+      "method": "GET",
+      "uri": "zone{dynamic}/map",
+      "handler": "HomeController@zoneMap",
+      "expect": "live",
+      "name": "zone.{dynamic}.map",
+      "dynamic": true
+    },
+    {
+      "id": "L146",
+      "pattern": "rsp-file-array",
+      "method": "GET",
+      "uri": "bundle/first",
+      "handler": "HomeController@bundleFirst",
+      "expect": "live"
+    },
+    {
+      "id": "L147",
+      "pattern": "rsp-file-array",
+      "method": "GET",
+      "uri": "bundle/second",
+      "handler": "HomeController@bundleSecond",
+      "expect": "live"
+    },
+    {
+      "id": "L148",
+      "pattern": "file-array-mount",
+      "method": "GET",
+      "uri": "api/kit/tools",
+      "handler": "HomeController@kitTools",
+      "expect": "live"
+    },
+    {
+      "id": "L149",
+      "pattern": "file-array-mount",
+      "method": "GET",
+      "uri": "api/kit/parts",
+      "handler": "HomeController@kitParts",
+      "expect": "live"
+    },
+    {
+      "id": "L150",
+      "pattern": "rsp-foreach-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/build",
+      "handler": "HomeController@channelBuild",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L151",
+      "pattern": "rsp-foreach-prefix-wrong",
+      "method": "GET",
+      "uri": "stable/build",
+      "handler": "HomeController@channelBuild",
+      "expect": "absent"
+    },
+    {
+      "id": "L152",
+      "pattern": "rsp-conditional-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/tickets",
+      "handler": "HomeController@deskTickets",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L153",
+      "pattern": "file-array-closure",
+      "method": "GET",
+      "uri": "api/mix/inline",
+      "handler": "HomeController@mixInline",
+      "expect": "live"
+    },
+    {
+      "id": "L154",
+      "pattern": "file-array-closure",
+      "method": "GET",
+      "uri": "api/mix/mixed",
+      "handler": "HomeController@mixFile",
+      "expect": "live"
+    },
+    {
+      "id": "L155",
+      "pattern": "file-array-spread",
+      "method": "GET",
+      "uri": "api/mix/spread",
+      "handler": "HomeController@spreadFile",
+      "expect": "live"
+    },
+    {
+      "id": "L156",
+      "pattern": "rsp-loop-reassigned-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/go",
+      "handler": "HomeController@laneGo",
+      "expect": "live",
+      "dynamic": true
+    }
+  ]
+}

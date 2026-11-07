@@ -26,7 +26,11 @@ npm install --legacy-peer-deps
 
 ### Pre-built binary (no dependencies)
 
-Download from releases/ and add to your `PATH`.
+Download from the GitHub Releases page and add to your `PATH`, or run the installer for your platform (more options in the [README](../README.md#pre-built-binary)):
+
+```bash
+curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-linux-x64-installer.sh | sh
+```
 
 ## Quick Start
 
@@ -117,43 +121,58 @@ The content is wrapped in markers:
 
 ## Supported Languages
 
-### Built-in (Tier 1) — Dedicated Parsers
+All 23 languages ship with their tree-sitter grammars; `mapx lang list` lists them with their extensions and tier.
+
+### Dedicated parsers
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
-| PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
-| JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
-| TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
-| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
+| PHP | `.php`, `.phtml`, `.php3`–`.php7` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| TypeScript | `.ts`, `.cts`, `.mts`, `.tsx` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks); a component symbol per file; template handler and binding calls, and render edges for locally or globally registered component tags; `props` / `emits` from `defineProps` / `defineEmits` on the component symbol; composable `useX()` calls and the functions destructured from them resolved through the import; navigate edges from Vue Router `push` / `replace` and `<router-link :to>` to the route's component |
+| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; template calls, event handlers and `use:` actions link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`) give render edges |
 
-### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
+### Query-driven parsers (tree-sitter queries)
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
-| Python | `.py` | classes, functions, methods (auto-promoted), constants |
+| Python | `.py`, `.pyw` | classes, functions, methods (auto-promoted), constants |
 | Go | `.go` | structs, interfaces, functions, methods, constants, packages, variables, type aliases |
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, statics, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, constructors, fields, constants, annotations, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
-| Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
+| Ruby | `.rb`, `.rake`, `.gemspec`, `Rakefile`, `Gemfile` | classes, modules, methods, constants, properties (attr_*) |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
-| C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
+| C++ | `.cpp`, `.hpp`, `.cc`, `.cxx`, `.hh`, `.h++`, `.c++`; `.h` headers that use C++-only syntax outside preprocessor conditionals (`namespace`, `class`, `template`, …) | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
-| Svelte | `.svelte` | functions, classes, methods, props, constants |
-| Lua | `.lua` | functions, methods, local functions, variables |
+| Lua | `.lua`, `.luau` | functions, methods, local functions, variables |
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
-| Bash | `.sh`, `.bash` | functions, variables, aliases |
-| Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
-| Dart | `.dart` | classes, functions, methods, enums, mixins, extensions, constants |
+| Bash | `.sh`, `.bash`, `.zsh` | functions, variables, aliases |
+| Fish | `.fish` | functions (calls and `source` imports tracked) |
+| Pascal | `.pas`, `.pp`, `.dpr`, `.lpr` | procedures, functions, classes, records, interfaces, methods, constants, units |
+| Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types (Dart 3.3+), constants, library namespaces |
+
+### Static (index-only)
+
+| File type | Extensions | Tracked references |
+|-----------|-----------|-------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | links to other files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
+| YAML | `.yaml`, `.yml` | relative paths to other YAML files (`./config.yaml`) |
+
+Extensionless scripts are indexed by their `#!` line (bash/sh/zsh, python, node/deno/bun, ts-node/tsx, ruby, php, lua, elixir, fish).
 
 ## Dependencies Tracked
 
 All languages track applicable reference types:
 
-- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`
+- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`. JS/TS/Vue imports also resolve path aliases (`@/x`, `~/x`, `#x`) through the importing app's own configuration: the nearest tsconfig/jsconfig `compilerOptions.paths`, else the `vite.config.*`, `vue.config.js`, `webpack.config.js` or `webpack.mix.js` alias of the app root (the nearest folder with a `package.json` or bundler config), else `@/` → the app's `src/`. Configs are read statically, never executed, and a parent project's aliases never apply to a nested app ([details](framework-integration.md#import-aliases-js--ts))
 - **Inheritance**: `extends`, `implements`, protocol conformance, mixins (`with`), `include`/`prepend`
 - **Instantiation**: `new ClassName()`, `ClassName()`, `.new`, composite literals, constructor invocations
 - **Calls**: function calls, method calls, remote calls, pipe operators, macro invocations
@@ -184,52 +203,9 @@ Stale locks (process no longer alive) are cleared automatically.
 
 ## Programmatic Usage
 
-You can also import `@mgamil/mapx` programmatically in Node.js or TypeScript applications to manage code graphs, run scans, or generate token-efficient context.
+MapX can be integrated programmatically as an ES Module in Node.js or TypeScript projects. This allows you to run scans, traverse dependency graphs, trace data flows, and build LLM-ready context dynamically.
 
-```typescript
-import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
-
-// 1. Load configuration and open database
-const dir = '/path/to/project';
-const config = await Config.load(dir);
-const store = new Store(`${dir}/.mapx/mapx.db`);
-
-// 2. Perform an incremental scan
-const scanner = new Scanner(dir, store);
-await scanner.scanIncremental();
-
-// 3. Load graph data
-const graph = new MapxGraph(config.repo.name);
-for (const file of store.getAllFiles()) {
-  graph.addFileNode(file.path, file.language, file.size_bytes, file.lines);
-}
-for (const edge of store.getAllEdges()) {
-  graph.addDependencyEdge({
-    sourceFile: edge.source_file,
-    targetFile: edge.target_file,
-    sourceSymbol: edge.source_symbol,
-    targetSymbol: edge.target_symbol,
-    edgeType: edge.edge_type,
-    repo: edge.repo,
-    weight: edge.weight,
-    verifiability: edge.verifiability,
-    targetRepo: edge.target_repo
-  });
-}
-
-// 4. Build a token-budgeted LLM context for a specific task
-const builder = new ContextBuilder(store, graph);
-const context = await builder.buildContext({
-  task: 'Debug memory leaks in SQLite connections',
-  tokens: 8000
-});
-
-console.log(context.text); // Prints structured Markdown context
-console.log(`Estimated token count: ${context.tokens}`);
-
-// 5. Always close the SQLite database store when done
-store.close();
-```
+For detailed documentation, module breakdowns, and e2e integration scripts, see the [Programmatic Usage Guide](programmatic-usage.md).
 
 ## Building a Standalone Binary
 
@@ -240,14 +216,32 @@ make build-linux       # or build-mac-arm, build-win
 # Cross-compile for all platforms
 make build-all
 
-# Build npm package
+# Build npm package (tsup + dashboard; `npm pack` / `npm publish` build the dashboard too)
 npm run build:npm
+
+# Dashboard only (installs no longer build it; `mapx ui` from source builds it when stale)
+npm run build:ui
+```
+
+The registry package (`npm install -g @mgamil/mapx`) ships the dashboard. Installing from git (`npm install github:…`), with `npm link` or from a `file:` path runs only `prepare`, which compiles the CLI. Run `npm run build:ui` in the MapX folder to add the dashboard (D020).
+
+```bash
 
 # Package + installers
 make package-all
 ```
 
 Binaries are output to `dist/` (~85-100MB each).
+
+## Publishing to npm (maintainers)
+
+The package is published as **`@mgamil/mapx`**; the unscoped name `mapx` belongs to someone else. Releases are owner-initiated. Pushing a `vX.Y.Z` tag runs `.github/workflows/publish-npm.yml`, which publishes with npm provenance. One-time setup:
+
+1. Create an npm **automation** access token for an account with publish rights on `@mgamil/mapx`.
+2. Add it to the GitHub repository as the Actions secret **`NPM_TOKEN`** (Settings → Secrets and variables → Actions).
+3. Keep `VERSION`, `package.json` and the CHANGELOG in step (`npm run version-sync`) before tagging.
+
+Native binaries must never be published: `npx tsx scripts/check-package.ts`, which CI runs, fails when the pack list contains a native ELF, Mach-O or PE binary.
 
 ## Development Shortcuts
 

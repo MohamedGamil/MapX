@@ -1,0 +1,64 @@
+// mapx:preset/symfony: a Symfony application.
+// AR-15 (M5-17-R1). By the src/ folders of the Symfony skeleton, and by the framework's base types
+// and attributes wherever a class lives: AbstractController, AbstractType, Command and #[AsCommand],
+// EventSubscriberInterface and #[AsEventListener], #[AsMessageHandler], Doctrine's repositories and
+// #[ORM\Entity]. An entity names its repository (`#[ORM\Entity(repositoryClass: …)]`, as make:entity
+// writes it), and a form may query one (an EntityType's query_builder); entities depend on nothing
+// else, messages on nothing; only controllers use forms.
+// Parameter: root, the folder holding the application ("" when bin/console is at the repo root).
+{
+  "parameters": { "root": "" },
+  "layers": [
+    // Controllers.
+    { "name": "Controller", "selectors": [
+      { "path": "%root%src/Controller/**" },
+      { "inherits": "Symfony\\Bundle\\FrameworkBundle\\Controller\\AbstractController" }
+    ] },
+    // Form types.
+    { "name": "Form", "selectors": [{ "path": "%root%src/Form/**" }, { "inherits": "Symfony\\Component\\Form\\AbstractType" }] },
+    // Console commands.
+    { "name": "Command", "selectors": [
+      { "path": "%root%src/Command/**" },
+      { "inherits": "Symfony\\Component\\Console\\Command\\Command" },
+      { "decorator": "Symfony\\Component\\Console\\Attribute\\AsCommand", "members": true }
+    ] },
+    // Event subscribers and listeners.
+    { "name": "EventSubscriber", "selectors": [
+      { "path": "%root%src/{EventSubscriber,EventListener}/**" },
+      { "implements": "Symfony\\Component\\EventDispatcher\\EventSubscriberInterface" },
+      { "decorator": "Symfony\\Component\\EventDispatcher\\Attribute\\AsEventListener", "members": true }
+    ] },
+    // Messenger handlers.
+    { "name": "MessageHandler", "selectors": [
+      { "path": "%root%src/MessageHandler/**" },
+      { "decorator": "Symfony\\Component\\Messenger\\Attribute\\AsMessageHandler", "members": true }
+    ] },
+    // Messenger messages: plain data.
+    { "name": "Message", "selectors": [{ "path": "%root%src/Message/**" }] },
+    // Application services.
+    { "name": "Service", "selectors": [{ "path": "%root%src/Service/**" }] },
+    // Doctrine repositories.
+    { "name": "Repository", "selectors": [
+      { "path": "%root%src/Repository/**" },
+      { "inherits": "Doctrine\\Bundle\\DoctrineBundle\\Repository\\ServiceEntityRepository" },
+      { "inherits": "Doctrine\\ORM\\EntityRepository" }
+    ] },
+    // Doctrine entities and embeddables.
+    { "name": "Entity", "selectors": [
+      { "path": "%root%src/Entity/**" },
+      { "decorator": "Doctrine\\ORM\\Mapping\\Entity", "members": true },
+      { "decorator": "Doctrine\\ORM\\Mapping\\Embeddable", "members": true }
+    ] }
+  ],
+  "rules": {
+    "Controller": ["Form", "Service", "Message", "Repository", "Entity"],
+    "Form": ["Repository", "Entity"],
+    "Command": ["Service", "Message", "Repository", "Entity"],
+    "EventSubscriber": ["Service", "Message", "Repository", "Entity"],
+    "MessageHandler": ["Service", "Message", "Repository", "Entity"],
+    "Service": ["Message", "Repository", "Entity"],
+    "Repository": ["Entity"],
+    "Message": [],
+    "Entity": ["Repository"]
+  }
+}

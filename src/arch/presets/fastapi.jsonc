@@ -1,0 +1,38 @@
+// mapx:preset/fastapi: a FastAPI application.
+// AR-15 (M5-17-R1). By the layouts of FastAPI's own guides: the full-stack template (api/routes,
+// api/deps.py, core/, crud.py, models.py) and the SQL tutorial (routers/, dependencies.py,
+// database.py, crud.py, models.py, schemas.py). Path operations may use the models directly (the
+// template's SQLModel classes are its schemas too); core may seed the database through crud and the
+// models (init_db); schemas and the models depend on no layer above them.
+// Parameter: root, the application package ("app/" by default, "" for the repo root).
+{
+  "parameters": { "root": "app/" },
+  "layers": [
+    // The application object: main.py.
+    { "name": "App", "selectors": [{ "path": "%root%main.py" }] },
+    // Path operations: APIRouter modules (api/ but its dependencies).
+    { "name": "Routers", "selectors": [{ "all": [
+      { "path": "%root%{routers,routes,endpoints,api}/**" },
+      { "not": { "path": "%root%**/{dependencies,deps}{.py,/**}" } }
+    ] }] },
+    // Dependencies (Depends providers): sessions, the current user; deps.py anywhere in the package.
+    { "name": "Dependencies", "selectors": [{ "path": "%root%**/{dependencies,deps}.py" }, { "path": "%root%**/{dependencies,deps}/**" }] },
+    // Business logic and CRUD helpers.
+    { "name": "Services", "selectors": [{ "path": "%root%{services,crud}/**" }, { "path": "%root%{services,crud}.py" }] },
+    // Pydantic request and response schemas.
+    { "name": "Schemas", "selectors": [{ "path": "%root%schemas/**" }, { "path": "%root%schemas.py" }] },
+    // ORM models (SQLAlchemy, SQLModel).
+    { "name": "Models", "selectors": [{ "path": "%root%models/**" }, { "path": "%root%models.py" }] },
+    // Settings, the database engine and session, security helpers.
+    { "name": "Core", "selectors": [{ "path": "%root%{core,db}/**" }, { "path": "%root%{config,database,db,settings,security}.py" }] }
+  ],
+  "rules": {
+    "App": ["Routers", "Dependencies", "Services", "Schemas", "Models", "Core"],
+    "Routers": ["Dependencies", "Services", "Schemas", "Models", "Core"],
+    "Dependencies": ["Services", "Schemas", "Models", "Core"],
+    "Services": ["Schemas", "Models", "Core"],
+    "Core": ["Services", "Models"],
+    "Models": ["Core"],
+    "Schemas": []
+  }
+}

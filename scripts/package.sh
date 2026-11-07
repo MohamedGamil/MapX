@@ -41,6 +41,40 @@ check_wasm() {
     fi
 }
 
+# The bun target that runs on this machine, or "none".
+host_target() {
+    case "$(uname -s)-$(uname -m)" in
+        Linux-x86_64)               echo "bun-linux-x64" ;;
+        Linux-aarch64|Linux-arm64)  echo "bun-linux-arm64" ;;
+        Darwin-arm64)               echo "bun-darwin-arm64" ;;
+        Darwin-x86_64)              echo "bun-darwin-x64" ;;
+        *)                          echo "none" ;;
+    esac
+}
+
+# Scans a throwaway project of more than 10 files with the built binary: the build fails unless the
+# scan ran on its parse workers (M0-06-R2).
+smoke_binary() {
+    local bin="$1" ws out i
+    ws="$(mktemp -d)"
+    for i in $(seq 1 12); do printf 'export function f%s() { return %s; }\n' "$i" "$i" > "$ws/f$i.ts"; done
+    printf "import { f1 } from './f1';\nexport function g() { return f1(); }\n" > "$ws/g.ts"
+    if ! "$bin" init "$ws" --no-agents --no-suggestions --no-mcp-configs --no-discover >/dev/null 2>&1; then
+        rm -rf "${ws:?}"; error "Smoke test: $bin init failed"
+    fi
+    # A worker fails f1.ts on purpose (test hook): only a scan on worker threads reports the hand-back.
+    if ! out="$(cd "$ws" && MAPX_PARSE_WORKERS=2 MAPX_TEST_WORKER_FAIL=f1.ts "$bin" scan 2>&1)"; then
+        rm -rf "${ws:?}"; error "Smoke test: $bin scan failed: $out"
+    fi
+    rm -rf "${ws:?}"
+    case "$out" in
+        *"Parallel parsing unavailable"*) error "Smoke test: $bin parsed on one thread: $(printf '%s\n' "$out" | grep 'Parallel parsing')" ;;
+        *"1 file(s) parsed on the main thread"*) ;;
+        *) error "Smoke test: $bin never started its parse workers" ;;
+    esac
+    ok "Smoke scan ran on worker threads"
+}
+
 build_binary() {
     local target="$1"
     local outfile="$2"
@@ -50,6 +84,7 @@ build_binary() {
         --define "MAPX_BUILD_VERSION='\"${VERSION}\"'" \
         --target="$target" \
         "$PROJECT_ROOT/src/main.ts" \
+        "$PROJECT_ROOT/src/parsers/parse-worker.ts" \
         --outfile "$PROJECT_ROOT/dist/$outfile" 2>/dev/null; then
         ok "Built $outfile ($(du -h "$PROJECT_ROOT/dist/$outfile" | cut -f1))"
         return 0
@@ -62,6 +97,11 @@ build_binary() {
 package_tarball() {
     local binary="$1"
     local archive_name="$2"
+
+    # Every packaged binary this machine can run is smoke-scanned, built here or by make (--skip-build).
+    if [ "bun-${binary#mapx-}" = "$(host_target)" ]; then
+        smoke_binary "$PROJECT_ROOT/dist/$binary"
+    fi
 
     info "Packaging $archive_name.tar.gz..."
 

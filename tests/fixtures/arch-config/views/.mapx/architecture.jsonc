@@ -1,0 +1,7 @@
+{
+  "layers": [
+    { "name": "Billing", "selectors": [{ "path": "src/billing/**" }] },
+    { "name": "Shipping", "selectors": [{ "path": "src/shipping/**" }] }
+  ],
+  "rules": { "Billing": [], "Shipping": [] }
+}

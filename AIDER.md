@@ -1,0 +1,29 @@
+<!-- mapx v0.4.0 #944c6ae2af97 -->
+# MapxGraph Aider Integration
+
+Use MapxGraph commands in this repository to analyze code across **23 languages**.
+
+## Loading this file
+
+`.aider.conf.yml` lists this file under `read:`, so Aider loads it as read-only context on startup.
+To load it by hand instead, run `aider --read AIDER.md` (or `/read-only AIDER.md` inside a session).
+
+## Key CLI Commands
+
+- `mapx export`: Compact summary of the graph structure.
+- `mapx export --format=svg -o graph.svg`: Visual graph export.
+- `mapx query <symbol>`: Find locations and definitions (supports glob: `*Service`, `get*`, and flexible namespace notations: `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`).
+- `mapx search <term> --kind class`: Advanced filtered search (auto-expand, fuzzy fallback).
+- `mapx search <term> --format json`: Structured JSON output.
+- `mapx deps <file>`: Show dependencies.
+- `mapx callers <symbol>`: Show who calls a symbol (fuzzy fallback on typos).
+- `mapx callees <symbol>`: Show what a symbol calls (fuzzy fallback on typos).
+- `mapx impact <symbol>`: Change impact analysis.
+- `mapx trace <symbol> [--sinks] [--include-leaf-libraries]`: Show data-flow traversal or list entry points/sinks.
+- `mapx sources`: Find entry points.
+- `mapx sinks [--include-leaf-libraries]`: Find terminal consumers.
+- `mapx context <task>`: Generate task-specific context.
+- `mapx node <symbol> --source`: View symbol source code.
+- `mapx node <symbol> --format json`: Symbol details as JSON.
+- `mapx sync` (or `mapx update`): Run after edits.
+<!-- /mapx -->

@@ -1,5 +1,6 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
+import { filterClustersToFiles } from './cluster-filter.js';
 import type { ExportOptions } from '../types.js';
 
 export function toonQuote(value: string, activeDelimiter: ',' | '\t' | '|' = ','): string {
@@ -59,10 +60,14 @@ export class ToonExporter {
     let files = this.store.getAllFiles(opt.repo);
     let symbols = this.store.getAllSymbols(opt.repo);
     let edges = this.store.getAllEdges(opt.repo);
-    const clusters = this.store.getClusters(opt.repo);
+    const clusters = filterClustersToFiles(
+      this.store.getClusters(opt.repo),
+      opt.files ? this.store.getClusterMemberships(opt.repo) : [],
+      opt.files ? new Set(opt.files) : null,
+    );
 
     let rankedFiles = this.graph.getRankedFiles();
-    let rankedSymbols = this.graph.getRankedSymbols();
+    let rankedSymbols = this.store.getTopSymbolsByPageRank(this.graph, 100000);
 
     // Filter by allowed files if specified
     if (opt.files) {
@@ -200,6 +205,9 @@ export class ToonExporter {
     } = params;
 
     const parts: string[] = [];
+    // TOON declares a non-comma delimiter inside the length brackets, and fields use it too.
+    const header = (key: string, count: number, fields?: string[]) =>
+      `${key}[${count}${delim === ',' ? '' : delim}]${fields ? `{${fields.join(delim)}}` : ''}:`;
 
     // Root document properties
     parts.push('version: 1');
@@ -217,7 +225,7 @@ export class ToonExporter {
     const languages = Array.from(new Set(files.map(f => f.language as string))).filter(Boolean).sort();
     if (languages.length > 0) {
       const escapedLangs = languages.map(l => toonQuote(l, delim)).join(delim);
-      parts.push(`  languages[${languages.length}]: ${escapedLangs}`);
+      parts.push(`  ${header('languages', languages.length)} ${escapedLangs}`);
     }
     parts.push('');
 
@@ -234,7 +242,7 @@ export class ToonExporter {
         return rB - rA;
       });
 
-      parts.push(`files[${files.length}]{path,language,symbols,pagerank}:`);
+      parts.push(header('files', files.length, ['path', 'language', 'symbols', 'pagerank']));
       for (const f of sortedFiles) {
         const path = toonQuote(f.path as string, delim);
         const language = toonQuote(f.language as string, delim);
@@ -247,7 +255,7 @@ export class ToonExporter {
 
     // 2. symbols tabular array
     if (symbols.length > 0) {
-      parts.push(`symbols[${symbols.length}]{name,kind,file,scope,pagerank}:`);
+      parts.push(header('symbols', symbols.length, ['name', 'kind', 'file', 'scope', 'pagerank']));
       for (const s of symbols) {
         const name = toonQuote(s.name as string, delim);
         const kind = toonQuote(s.kind as string, delim);
@@ -276,7 +284,7 @@ export class ToonExporter {
     });
 
     if (filteredEdges.length > 0) {
-      parts.push(`edges[${filteredEdges.length}]{sourceFile,targetFile,edgeType,sourceSymbol,targetSymbol,weight}:`);
+      parts.push(header('edges', filteredEdges.length, ['sourceFile', 'targetFile', 'edgeType', 'sourceSymbol', 'targetSymbol', 'weight']));
       for (const e of filteredEdges) {
         const sourceFile = toonQuote(e.source_file as string, delim);
         const targetFile = toonQuote((e.target_file as string) || '', delim);
@@ -291,7 +299,7 @@ export class ToonExporter {
 
     // 4. clusters tabular array
     if (clusters.length > 0) {
-      parts.push(`clusters[${clusters.length}]{name,source,parentName,depth,fileCount}:`);
+      parts.push(header('clusters', clusters.length, ['name', 'source', 'parentName', 'depth', 'fileCount']));
       for (const c of clusters) {
         const name = toonQuote(c.name as string, delim);
         const source = toonQuote(c.source as string, delim);

@@ -1,6 +1,15 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
 
+/**
+ * A DOT double-quoted ID or label: `"` and `\` escaped, line breaks as `\n`, other control
+ * characters dropped (M5-13: the layer graph quotes every name through this; layer names are free text).
+ */
+export function dotQuote(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r\n?|\n/g, '\\n').replace(/[\u0000-\u001F\u007F]/g, '')}"`;
+}
+
 export class DotExporter {
   private store: Store;
   private graph: MapxGraph;
@@ -124,6 +133,10 @@ export class DotExporter {
       return subLines;
     };
 
+    if (clusterMode === 'auto' && maxClusterDepth <= 0) {
+      return this.clusterLevel(files.map(f => f.path as string), edges, clusters, childrenMap, clusterFilesMap, roots);
+    }
+
     if (clusterMode === 'none') {
       // Flat rendering — all files as top-level nodes
       for (const file of files) {
@@ -152,22 +165,30 @@ export class DotExporter {
 
     lines.push('');
 
+    // `dashed` is reserved for inferred edges (F01); verified edge types are told apart by
+    // weight and colour instead (M0-01-R1).
     const edgeStyles: Record<string, string> = {
       import: 'solid',
       require: 'solid',
       extends: 'bold',
-      implements: 'dashed',
+      implements: 'solid',
       call: 'dotted',
       instantiation: 'dotted',
       relation: 'bold',
       route: 'solid',
-      binding: 'dashed',
+      binding: 'solid',
       middleware: 'dotted',
-      dispatch: 'dashed',
+      dispatch: 'bold',
       notify: 'dotted',
       render: 'dotted',
     };
 
+    // One line per file pair and edge type, dashed only when no verified edge backs it; the
+    // first edge's verifiability alone depended on edge order (M0-17-R2).
+    const verifiedKeys = new Set<string>();
+    for (const edge of edges) {
+      if (edge.verifiability !== 'inferred') verifiedKeys.add(`${edge.source_file}->${edge.target_file}:${edge.edge_type}`);
+    }
     const seen = new Set<string>();
     for (const edge of edges) {
       const src = edge.source_file as string;
@@ -178,7 +199,7 @@ export class DotExporter {
       seen.add(key);
 
       let style = edgeStyles[type] || 'solid';
-      if (edge.verifiability === 'inferred') {
+      if (!verifiedKeys.has(key)) {
         style = 'dashed';
       }
       let colorAttr = '';
@@ -200,6 +221,71 @@ export class DotExporter {
       lines.push(`  "${src}" -> "${tgt}" [label="${type}", style=${style}${colorAttr}];`);
     }
 
+    lines.push('}');
+    return lines.join('\n');
+  }
+
+  /**
+   * `--cluster auto --depth 0`: one node per cluster and one edge per cluster pair, labelled with
+   * its edge count and types, penwidth log(count) + 1 capped at 5 (F15, M0-08-R1). A cluster
+   * with no files of its own stands for its children, so a PHP `App` namespace shows as
+   * `App / Models`, `App / Services`, ... rather than one node holding everything.
+   */
+  private clusterLevel(
+    files: string[],
+    edges: any[],
+    clusters: any[],
+    childrenMap: Map<string, any[]>,
+    clusterFilesMap: Map<string, string[]>,
+    roots: any[],
+  ): string {
+    const byName = new Map(clusters.map(c => [c.name as string, c]));
+    const shown: any[] = [];
+    const expand = (c: any) => {
+      const children = childrenMap.get(c.name) || [];
+      if (!(clusterFilesMap.get(c.name) || []).length && children.length) children.forEach(expand);
+      else shown.push(c);
+    };
+    roots.forEach(expand);
+    const shownNames = new Set(shown.map(c => c.name as string));
+
+    // Each file belongs to the shown cluster that is its primary cluster or an ancestor of it.
+    const fileCluster = new Map<string, string>();
+    for (const [clusterName, list] of clusterFilesMap) {
+      let current: any = byName.get(clusterName);
+      while (current && !shownNames.has(current.name)) current = current.parent_name ? byName.get(current.parent_name) : undefined;
+      if (current) for (const f of list) fileCluster.set(f, current.name);
+    }
+    const counts = new Map<string, number>();
+    for (const f of files) {
+      const c = fileCluster.get(f);
+      if (c) counts.set(c, (counts.get(c) || 0) + 1);
+    }
+
+    const id = (name: string) => `cluster_${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const lines = ['digraph Mapx {', '  rankdir=TB;', '  node [shape=folder, style=filled, fillcolor="#E8F4FD", fontsize=12];', ''];
+    for (const c of shown) {
+      const n = counts.get(c.name) || 0;
+      if (n) lines.push(`  "${id(c.name)}" [label="${c.label}\\n${n} file${n === 1 ? '' : 's'}"];`);
+    }
+    lines.push('');
+
+    const pairs = new Map<string, { from: string; to: string; count: number; types: Set<string> }>();
+    for (const e of edges) {
+      const from = fileCluster.get(e.source_file as string);
+      const to = fileCluster.get(e.target_file as string);
+      if (!from || !to || from === to) continue;
+      const key = `${from}\0${to}`;
+      const pair = pairs.get(key) ?? { from, to, count: 0, types: new Set<string>() };
+      pair.count++;
+      pair.types.add(e.edge_type as string);
+      pairs.set(key, pair);
+    }
+    for (const p of [...pairs.values()].sort((a, b) => b.count - a.count || a.from.localeCompare(b.from) || a.to.localeCompare(b.to))) {
+      const penwidth = Math.min(5, Math.log(p.count) + 1);
+      const label = `${p.count} edge${p.count === 1 ? '' : 's'} (${[...p.types].sort().join(', ')})`;
+      lines.push(`  "${id(p.from)}" -> "${id(p.to)}" [label="${label}", penwidth=${Number(penwidth.toFixed(2))}];`);
+    }
     lines.push('}');
     return lines.join('\n');
   }

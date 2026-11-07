@@ -1,0 +1,149 @@
+{
+    "_readme": [
+        "Synthetic (M5-21): a hand-written lock in Composer's format for the arch-rules php app, labelled in expected-externals.json. Versions and autoload sections follow the real packages; dist, source and other fields are left out."
+    ],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "doctrine/common",
+            "version": "3.4.4",
+            "require": { "doctrine/persistence": "^2.0 || ^3.0" },
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Doctrine\\Common\\": "src" }
+            }
+        },
+        {
+            "name": "doctrine/event-manager",
+            "version": "2.0.1",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Doctrine\\Common\\": "src" }
+            }
+        },
+        {
+            "name": "guzzlehttp/guzzle",
+            "version": "7.8.1",
+            "require": { "guzzlehttp/psr7": "^2.6" },
+            "type": "library",
+            "autoload": {
+                "files": ["src/functions_include.php"],
+                "psr-4": { "GuzzleHttp\\": "src/" }
+            }
+        },
+        {
+            "name": "guzzlehttp/psr7",
+            "version": "2.6.2",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "GuzzleHttp\\Psr7\\": "src/" }
+            }
+        },
+        {
+            "name": "illuminate/collections",
+            "version": "v11.9.2",
+            "require": { "illuminate/conditionable": "^11.0", "illuminate/macroable": "^11.0" },
+            "type": "library",
+            "autoload": {
+                "files": ["functions.php", "helpers.php"],
+                "psr-4": { "Illuminate\\Support\\": "" }
+            }
+        },
+        {
+            "name": "illuminate/macroable",
+            "version": "v11.9.2",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Illuminate\\Support\\": "" }
+            }
+        },
+        {
+            "name": "illuminate/routing",
+            "version": "v11.9.2",
+            "require": { "illuminate/support": "^11.0", "psr/log": "^3.0" },
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Illuminate\\Routing\\": "" }
+            }
+        },
+        {
+            "name": "illuminate/support",
+            "version": "v11.9.2",
+            "require": { "nesbot/carbon": "^2.72", "illuminate/collections": "^11.0", "illuminate/macroable": "^11.0" },
+            "type": "library",
+            "autoload": {
+                "files": ["functions.php", "helpers.php"],
+                "psr-4": { "Illuminate\\Support\\": "" }
+            }
+        },
+        {
+            "name": "mustache/mustache",
+            "version": "v2.14.2",
+            "type": "library",
+            "autoload": {
+                "psr-0": { "Mustache": "src/" }
+            }
+        },
+        {
+            "name": "nesbot/carbon",
+            "version": "2.72.3",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Carbon\\": "src/Carbon/" }
+            }
+        },
+        {
+            "name": "psr/log",
+            "version": "3.0.0",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Psr\\Log\\": "src" }
+            }
+        }
+    ],
+    "packages-dev": [
+        {
+            "name": "doctrine/instantiator",
+            "version": "2.0.0",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Doctrine\\Instantiator\\": "src/Doctrine/Instantiator/" }
+            }
+        },
+        {
+            "name": "fakerphp/faker",
+            "version": "v1.23.1",
+            "type": "library",
+            "autoload": {
+                "psr-4": { "Faker\\": "src/Faker/" }
+            }
+        },
+        {
+            "name": "myclabs/deep-copy",
+            "version": "1.11.1",
+            "type": "library",
+            "autoload": {
+                "files": ["src/DeepCopy/deep_copy.php"],
+                "psr-4": { "DeepCopy\\": "src/DeepCopy/" }
+            }
+        },
+        {
+            "name": "phpunit/phpunit",
+            "version": "10.5.20",
+            "require": { "myclabs/deep-copy": "^1.10.1", "doctrine/instantiator": "^2.0" },
+            "type": "library",
+            "autoload": {
+                "files": ["src/Framework/Assert/Functions.php"],
+                "classmap": ["src/"]
+            }
+        }
+    ],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": { "php": "^8.2", "ext-pdo": "*" },
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

@@ -5,8 +5,58 @@ import * as path from 'node:path';
 import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy-matcher.js';
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
+import type { ExternalRefRow } from './external-refs.js';
 
-const CURRENT_SCHEMA_VERSION = 6;
+/** A stored external-reference candidate with its decision (M5-19) and attribution (M5-20); 0/1 for booleans. */
+export interface ExternalCandidate {
+  id: number;
+  file_path: string;
+  specifier: string;
+  /** The name used from the specifier (M5-22: `from google.cloud import storage` names `google.cloud.storage`). */
+  symbol: string | null;
+  ecosystem: string;
+  external: number;
+  metadata: string | null;
+  package: string | null;
+  origin: string | null;
+  direct: number | null;
+  dev: number | null;
+  attribution: string | null;
+}
+
+/** A candidate's decision as the end of a run writes it. */
+export type ExternalDecision = Omit<ExternalCandidate, 'file_path' | 'specifier' | 'symbol' | 'ecosystem' | 'metadata'>;
+
+const CURRENT_SCHEMA_VERSION = 10;
+
+function parseSearchPattern(pattern: string): { scopeLike: string | null; namePattern: string } {
+  const commonExtensions = new Set([
+    'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+    'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+    'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+  ]);
+
+  if (pattern.includes('::')) {
+    const parts = pattern.split('::');
+    const namePart = parts.pop()!;
+    const scopePart = parts.join('::');
+    const scopeLike = isWildcardTerm(scopePart) ? '%' : (isGlobPattern(scopePart) ? globToLike(scopePart) : `%${scopePart}%`);
+    return { scopeLike, namePattern: namePart };
+  }
+
+  if (pattern.includes('.')) {
+    const parts = pattern.split('.');
+    const last = parts[parts.length - 1].toLowerCase();
+    if (!commonExtensions.has(last)) {
+      const namePart = parts.pop()!;
+      const scopePart = parts.join('.');
+      const scopeLike = isWildcardTerm(scopePart) ? '%' : (isGlobPattern(scopePart) ? globToLike(scopePart) : `%${scopePart}%`);
+      return { scopeLike, namePattern: namePart };
+    }
+  }
+
+  return { scopeLike: null, namePattern: pattern };
+}
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -136,6 +186,99 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
     ],
   },
+  {
+    version: 7,
+    description: 'Add layer column to clusters table for architectural layer assignments',
+    up: [
+      `ALTER TABLE clusters ADD COLUMN layer TEXT DEFAULT 'other'`,
+    ],
+  },
+  {
+    version: 8,
+    description: 'Add codebase classification role columns, classification_signals, cluster_metrics, and arch_smells tables',
+    up: [
+      `ALTER TABLE files ADD COLUMN role TEXT DEFAULT 'other'`,
+      `ALTER TABLE files ADD COLUMN role_confidence REAL DEFAULT 0.0`,
+      `CREATE TABLE IF NOT EXISTS classification_signals (
+        file_path TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        source TEXT NOT NULL,
+        role TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        reason TEXT NOT NULL,
+        PRIMARY KEY (file_path, repo, source)
+      )`,
+      `CREATE TABLE IF NOT EXISTS cluster_metrics (
+        cluster_name TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        file_count INTEGER NOT NULL,
+        afferent_coupling REAL NOT NULL,
+        efferent_coupling REAL NOT NULL,
+        instability REAL NOT NULL,
+        internal_edges INTEGER NOT NULL,
+        external_edges INTEGER NOT NULL,
+        cohesion_ratio REAL NOT NULL,
+        abstractness REAL NOT NULL,
+        distance_from_main_seq REAL NOT NULL,
+        PRIMARY KEY (cluster_name, repo)
+      )`,
+      `CREATE TABLE IF NOT EXISTS arch_smells (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repo TEXT NOT NULL,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        description TEXT NOT NULL,
+        involved_files TEXT NOT NULL,
+        involved_clusters TEXT NOT NULL,
+        suggestion TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_arch_smells_repo ON arch_smells(repo)`,
+    ],
+  },
+  {
+    version: 9,
+    description: 'Add pagerank column to files table',
+    up: [
+      `ALTER TABLE files ADD COLUMN pagerank REAL DEFAULT 0.0`,
+      `CREATE INDEX IF NOT EXISTS idx_files_pagerank ON files(pagerank)`
+    ]
+  },
+  {
+    version: 10,
+    description: 'Add external references: the candidates table and the external_refs view of those decided external (M5-19)',
+    up: [
+      // Never edges: edge counts, metrics and PageRank ignore them (docs/research/deptrac/03 §4).
+      // Every reference that gave no edge and may name something outside the workspace is a
+      // candidate; `external` is decided against the workspace as it stands, again at the end of
+      // every scan and sync, since other files decide it (review of M5-19). `package` …
+      // `attribution` are filled by the per-ecosystem attribution (M5-20 … M5-23).
+      `CREATE TABLE IF NOT EXISTS external_ref_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_path TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        source_symbol TEXT,
+        specifier TEXT NOT NULL,
+        symbol TEXT,
+        kind TEXT NOT NULL,
+        ecosystem TEXT NOT NULL,
+        external INTEGER NOT NULL DEFAULT 0,
+        package TEXT,
+        origin TEXT,
+        direct INTEGER,
+        dev INTEGER,
+        attribution TEXT,
+        metadata TEXT DEFAULT '{}'
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_file ON external_ref_candidates(file_path)`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_repo ON external_ref_candidates(repo)`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_specifier ON external_ref_candidates(specifier)`,
+      `CREATE VIEW IF NOT EXISTS external_refs AS
+        SELECT id, file_path, repo, line, source_symbol, specifier, symbol, kind, ecosystem,
+               package, origin, direct, dev, attribution, metadata
+        FROM external_ref_candidates WHERE external = 1`,
+    ]
+  }
 ];
 
 function createStoreBackend(dbPath: string): StoreBackend {
@@ -216,6 +359,10 @@ export class Store {
     ).run(key, value);
   }
 
+  deleteMeta(key: string): void {
+    this.backend.prepare('DELETE FROM meta WHERE key = ?').run(key);
+  }
+
   getMeta(key: string): string | null {
     const row = this.backend.prepare('SELECT value FROM meta WHERE key = ?').get(key);
     return row ? (row.value as string) : null;
@@ -250,6 +397,17 @@ export class Store {
     );
   }
 
+  /**
+   * A file's content and git blob hashes and scan time, once its parse result is written (M0-02-R10).
+   * `scannedAt` is when the content was read, not when the result is written: an edit made while the
+   * scan parsed stays newer than the index, so staleness and the git sync still see it (review of
+   * M0-02-R12).
+   */
+  setFileHashes(filePath: string, contentHash: string | null, gitBlobHash: string | null, scannedAt = new Date().toISOString()): void {
+    this.backend.prepare('UPDATE files SET content_hash = ?, git_blob_hash = ?, last_scanned = ? WHERE path = ?')
+      .run(contentHash, gitBlobHash, scannedAt, filePath);
+  }
+
   updateFileMetadata(filePath: string, metadata: Record<string, any>): void {
     const file = this.getFile(filePath);
     let merged = { ...metadata };
@@ -269,7 +427,32 @@ export class Store {
   deleteFile(filePath: string): void {
     this.backend.prepare('DELETE FROM symbols WHERE file_path = ?').run(filePath);
     this.backend.prepare('DELETE FROM edges WHERE source_file = ? OR target_file = ?').run(filePath, filePath);
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
     this.backend.prepare('DELETE FROM files WHERE path = ?').run(filePath);
+  }
+
+  /** Other files with an edge into `filePath`. */
+  /** Files with an import or require edge into the file (M2-08). */
+  getImporters(filePath: string): string[] {
+    return this.backend.prepare("SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ? AND edge_type IN ('import', 'require')")
+      .all(filePath, filePath).map(r => r.source_file as string);
+  }
+
+  /** Files whose metadata JSON contains `text` (a pre-filter; callers parse to confirm) (M2-08-R2). */
+  filesWithMetadataText(text: string): Array<{ path: unknown; metadata: unknown }> {
+    return this.backend.prepare("SELECT path, metadata FROM files WHERE metadata LIKE ? ESCAPE '\\'")
+      .all(`%${text.replace(/[\\%_]/g, (c) => '\\' + c)}%`) as Array<{ path: unknown; metadata: unknown }>;
+  }
+
+  /** The paths of indexed JVM and Python files, to tell which folders and names the project has (M2-08-R8). */
+  getJvmAndPythonPaths(): string[] {
+    return this.backend.prepare("SELECT path FROM files WHERE path LIKE '%.java' OR path LIKE '%.kt' OR path LIKE '%.kts' OR path LIKE '%.scala' OR path LIKE '%.py'")
+      .all().map(r => r.path as string);
+  }
+
+  getReferrers(filePath: string): string[] {
+    return this.backend.prepare('SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ?')
+      .all(filePath, filePath).map(r => r.source_file as string);
   }
 
   getFile(filePath: string): Record<string, unknown> | undefined {
@@ -281,6 +464,14 @@ export class Store {
       return this.backend.prepare('SELECT * FROM files WHERE repo = ?').all(repo);
     }
     return this.backend.prepare('SELECT * FROM files').all();
+  }
+
+  /**
+   * Get files matching a path suffix pattern (e.g., 'pubspec.yaml').
+   * Uses SQL LIKE for efficient filtering without loading all files.
+   */
+  getFilesByPattern(pathSuffix: string): Record<string, unknown>[] {
+    return this.backend.prepare('SELECT * FROM files WHERE path LIKE ?').all(`%${pathSuffix}`);
   }
 
   insertSymbol(sym: {
@@ -305,24 +496,35 @@ export class Store {
   }
 
   searchSymbols(namePattern: string, repo?: string): Record<string, unknown>[] {
-    // Support glob patterns: *Service → %Service, get* → get%
+    const { scopeLike, namePattern: term } = parseSearchPattern(namePattern);
     let likePattern: string;
-    if (isWildcardTerm(namePattern)) {
+    if (isWildcardTerm(term)) {
       likePattern = '%';
-    } else if (isGlobPattern(namePattern)) {
-      likePattern = globToLike(namePattern);
+    } else if (isGlobPattern(term)) {
+      likePattern = globToLike(term);
     } else {
-      likePattern = `%${namePattern}%`;
+      likePattern = `%${term}%`;
     }
 
-    if (repo) {
+    if (scopeLike) {
+      if (repo) {
+        return this.backend.prepare(
+          'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND scope LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+        ).all(likePattern, scopeLike, repo);
+      }
       return this.backend.prepare(
-        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
-      ).all(likePattern, repo);
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND scope LIKE ? COLLATE NOCASE ORDER BY kind, name'
+      ).all(likePattern, scopeLike);
+    } else {
+      if (repo) {
+        return this.backend.prepare(
+          'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+        ).all(likePattern, repo);
+      }
+      return this.backend.prepare(
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
+      ).all(likePattern);
     }
-    return this.backend.prepare(
-      'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
-    ).all(likePattern);
   }
 
   getSymbolsForFile(filePath: string): Record<string, unknown>[] {
@@ -367,14 +569,73 @@ export class Store {
     );
   }
 
+  /** A file's outgoing edges and its external-reference candidates: both come from resolving its references (M5-19). */
   deleteEdgesForFile(filePath: string): void {
     this.backend.prepare('DELETE FROM edges WHERE source_file = ?').run(filePath);
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
+  }
+
+  /** Replaces a file's external-reference candidates (M5-19). */
+  replaceExternalRefs(filePath: string, repo: string, refs: ExternalRefRow[]): void {
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
+    if (!refs.length) return;
+    const insert = this.backend.prepare(
+      'INSERT INTO external_ref_candidates (file_path, repo, line, source_symbol, specifier, symbol, kind, ecosystem, external, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    for (const r of refs) {
+      insert.run(filePath, repo, r.line, r.sourceSymbol, r.specifier, r.symbol, r.kind, r.ecosystem, r.external ? 1 : 0, r.metadata ? JSON.stringify(r.metadata) : '{}');
+    }
+  }
+
+  /** Every candidate with what decides it and its decision, for the decision at the end of a scan (M5-19, M5-20). */
+  getExternalCandidates(): ExternalCandidate[] {
+    return this.backend.prepare(
+      'SELECT id, file_path, specifier, symbol, ecosystem, external, metadata, package, origin, direct, dev, attribution FROM external_ref_candidates'
+    ).all() as unknown as ExternalCandidate[];
+  }
+
+  /** Records candidates' decisions: external (0 or 1) and the attribution, by id (M5-19, M5-20). */
+  setExternalDecisions(decisions: ExternalDecision[]): void {
+    const update = this.backend.prepare(
+      'UPDATE external_ref_candidates SET external = ?, package = ?, origin = ?, direct = ?, dev = ?, attribution = ? WHERE id = ?'
+    );
+    this.inTransaction(() => {
+      for (const d of decisions) update.run(d.external, d.package, d.origin, d.direct, d.dev, d.attribution, d.id);
+    });
+  }
+
+  /** Drops the candidates of files no longer indexed (an index an older MapX synced) (M5-19). */
+  deleteOrphanExternalCandidates(): void {
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path NOT IN (SELECT path FROM files)').run();
+  }
+
+  /** PHP classes, interfaces, traits, enums and functions of the workspace, by lower-case qualified name (M5-19). */
+  getPhpDeclaredNames(): Set<string> {
+    const rows = this.backend.prepare(
+      "SELECT s.name, f.namespace FROM symbols s JOIN files f ON f.path = s.file_path WHERE f.language = 'php' AND (s.scope IS NULL OR s.scope = '') AND s.kind IN ('class', 'interface', 'trait', 'enum', 'function')"
+    ).all();
+    return new Set(rows.map(r => (r.namespace ? `${r.namespace}\\${r.name}` : String(r.name)).toLowerCase()));
+  }
+
+  /** External references: the candidates decided external, by file and line (M5-19). */
+  getExternalRefs(options: { repo?: string; file?: string } = {}): Record<string, unknown>[] {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (options.repo) { where.push('repo = ?'); params.push(options.repo); }
+    if (options.file) { where.push('file_path = ?'); params.push(options.file); }
+    return this.backend.prepare(
+      `SELECT * FROM external_refs${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY file_path, line, specifier, symbol, kind, id`
+    ).all(...params);
   }
 
   deleteFrameworkEdgesForRepo(repoName: string): void {
     this.backend.prepare(
       "DELETE FROM edges WHERE repo = ? AND edge_type IN ('route', 'middleware', 'hook', 'graphql_resolver', 'message_handler', 'websocket_handler')"
     ).run(repoName);
+  }
+
+  deleteEdgesByType(edgeType: string): void {
+    this.backend.prepare('DELETE FROM edges WHERE edge_type = ?').run(edgeType);
   }
 
   getEdgesForFile(filePath: string): Record<string, unknown>[] {
@@ -396,7 +657,20 @@ export class Store {
     return this.backend.prepare('SELECT * FROM edges').all();
   }
 
-  queryEdges(options: { type?: string; from?: string; to?: string; repo?: string }): Record<string, unknown>[] {
+  /**
+   * Edge query behind `mapx edges` and mapx_edges. `type` is a list, as an array or comma-separated
+   * (M0-03-R3: an array used to throw); `file` with `direction` selects edges leaving it (outgoing),
+   * reaching it (incoming) or both; `from` / `to` are substring filters (M0-03-R2).
+   */
+  queryEdges(options: {
+    type?: string | string[];
+    from?: string;
+    to?: string;
+    repo?: string;
+    file?: string;
+    direction?: 'outgoing' | 'incoming' | 'both';
+    verifiedOnly?: boolean;
+  }): Record<string, unknown>[] {
     let sql = 'SELECT * FROM edges WHERE 1=1';
     const params: string[] = [];
 
@@ -404,9 +678,23 @@ export class Store {
       sql += ' AND repo = ?';
       params.push(options.repo);
     }
-    if (options.type) {
-      sql += ' AND edge_type = ?';
-      params.push(options.type);
+    const types = [options.type ?? []].flat().flatMap(t => String(t).split(',')).map(t => t.trim()).filter(Boolean);
+    if (types.length) {
+      sql += ` AND edge_type IN (${types.map(() => '?').join(', ')})`;
+      params.push(...types);
+    }
+    if (options.file) {
+      const direction = options.direction ?? 'both';
+      if (direction === 'outgoing') sql += ' AND source_file = ?';
+      else if (direction === 'incoming') sql += ' AND target_file = ?';
+      else {
+        sql += ' AND (source_file = ? OR target_file = ?)';
+        params.push(options.file);
+      }
+      params.push(options.file);
+    }
+    if (options.verifiedOnly) {
+      sql += " AND COALESCE(verifiability, 'verified') != 'inferred'";
     }
     if (options.from) {
       sql += ' AND source_file LIKE ?';
@@ -417,7 +705,7 @@ export class Store {
       params.push(`%${options.to}%`);
     }
 
-    return this.backend.prepare(sql).all(...params);
+    return this.backend.prepare(sql + ' ORDER BY source_file, target_file, edge_type').all(...params);
   }
 
   getFileCount(repo?: string): number {
@@ -484,10 +772,11 @@ export class Store {
     parentName: string | null;
     depth: number;
     fileCount: number;
+    layer?: string;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count, layer)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       cluster.repo,
       cluster.name,
@@ -495,7 +784,8 @@ export class Store {
       cluster.source,
       cluster.parentName,
       cluster.depth,
-      cluster.fileCount
+      cluster.fileCount,
+      cluster.layer ?? 'other'
     );
   }
 
@@ -591,13 +881,52 @@ export class Store {
     });
   }
 
+  /**
+   * Wipe all data owned by a repo in preparation for a fresh forced re-scan.
+   * Unlike deleteRepo(), this intentionally preserves:
+   *   - Cross-repo edges where this repo is only the TARGET (those belong to
+   *     other repos' scans and will be cleaned up when those repos are re-scanned).
+   *   - last_scan_commit / last_scan_time meta keys (updated once scan completes).
+   */
+  resetRepoForScan(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM external_ref_candidates WHERE repo = ?').run(repoName);
+    });
+  }
+
   deleteRepo(repoName: string): void {
     this.inTransaction(() => {
       this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM edges WHERE repo = ? OR target_repo = ?').run(repoName, repoName);
       this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
-      this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM external_ref_candidates WHERE repo = ?').run(repoName);
+      // Every `<kind>:<repo>` record of the repo (scan state, resume state, Vue registry, HTTP inputs, profile).
+      this.backend.prepare("DELETE FROM meta WHERE substr(key, -length(?) - 1) = ':' || ?").run(repoName, repoName);
+      // The other repos no longer saw this one: when it comes back it is newly visible to them, so
+      // their references into it are resolved again (M0-10-R4).
+      for (const row of this.backend.prepare("SELECT key, value FROM meta WHERE key LIKE 'resolution_repos:%'").all()) {
+        try {
+          const repos = JSON.parse(row.value as string) as string[];
+          if (repos.includes(repoName)) this.setMeta(row.key as string, JSON.stringify(repos.filter(r => r !== repoName)));
+        } catch { /* a malformed record is replaced by the next scan */ }
+      }
     });
+  }
+
+  /** The repos with indexed files. */
+  getRepoNames(): string[] {
+    return this.backend.prepare('SELECT DISTINCT repo FROM files ORDER BY repo').all().map(r => r.repo as string);
   }
 
   searchSymbolsFiltered(options: {
@@ -606,31 +935,35 @@ export class Store {
     filePrefix?: string;
     exact?: boolean;
     limit?: number;
+    offset?: number;
     repo?: string;
   }): Record<string, any>[] {
     const limit = options.limit ?? 20;
+    const offset = options.offset ?? 0;
+    const { scopeLike, namePattern: term } = parseSearchPattern(options.term);
+
     let sql = 'SELECT * FROM symbols WHERE ';
     const params: any[] = [];
 
-    const wildcard = isWildcardTerm(options.term);
+    const wildcard = isWildcardTerm(term);
 
     if (wildcard) {
-      // Wildcard: match all symbols (no name filter)
-      // Works with or without a file prefix — the key behavioral fix
       sql += '1=1';
     } else if (options.exact) {
-      // Exact: case-insensitive exact name match
       sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
-      params.push(options.term, options.term);
-    } else if (isGlobPattern(options.term)) {
-      // Glob: convert * and ? to SQL LIKE wildcards, case-insensitive
-      const likePattern = globToLike(options.term);
+      params.push(term, term);
+    } else if (isGlobPattern(term)) {
+      const likePattern = globToLike(term);
       sql += '(name LIKE ? COLLATE NOCASE)';
       params.push(likePattern);
     } else {
-      // Default: substring match, case-insensitive
       sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
-      params.push(`%${options.term}%`, `%${options.term}%`);
+      params.push(`%${term}%`, `%${term}%`);
+    }
+
+    if (scopeLike) {
+      sql += ' AND scope LIKE ? COLLATE NOCASE';
+      params.push(scopeLike);
     }
 
     if (options.kind) {
@@ -648,10 +981,59 @@ export class Store {
       params.push(options.repo);
     }
 
-    sql += ' ORDER BY kind, name LIMIT ?';
-    params.push(limit);
+    sql += ' ORDER BY kind, name LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     return this.backend.prepare(sql).all(...params);
+  }
+
+  countSymbolsFiltered(options: {
+    term: string;
+    kind?: string;
+    filePrefix?: string;
+    exact?: boolean;
+    repo?: string;
+  }): number {
+    let sql = 'SELECT COUNT(*) as cnt FROM symbols WHERE ';
+    const params: any[] = [];
+    const { scopeLike, namePattern: term } = parseSearchPattern(options.term);
+
+    const wildcard = isWildcardTerm(term);
+
+    if (wildcard) {
+      sql += '1=1';
+    } else if (options.exact) {
+      sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
+      params.push(term, term);
+    } else if (isGlobPattern(term)) {
+      const likePattern = globToLike(term);
+      sql += '(name LIKE ? COLLATE NOCASE)';
+      params.push(likePattern);
+    } else {
+      sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
+      params.push(`%${term}%`, `%${term}%`);
+    }
+
+    if (scopeLike) {
+      sql += ' AND scope LIKE ? COLLATE NOCASE';
+      params.push(scopeLike);
+    }
+
+    if (options.kind) {
+      sql += ' AND LOWER(kind) = ?';
+      params.push(options.kind.toLowerCase());
+    }
+    if (options.filePrefix) {
+      sql += ' AND file_path LIKE ?';
+      params.push(`${options.filePrefix}%`);
+    }
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    const row = this.backend.prepare(sql).get(...params) as { cnt: number };
+    return row?.cnt ?? 0;
   }
 
   /**
@@ -696,19 +1078,62 @@ export class Store {
     return rows as Array<{ name: string; kind: string; file_path: string }>;
   }
 
-  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+  /**
+   * Symbols named by `fullName`: `Scope::name`, or `Scope.name` (`.` and `::` taken as the same
+   * separator), matched by scope; and symbols whose own name is `fullName`, such as the string-keyed
+   * member `'api.get'` (M4-26). With `one`, the scoped match is preferred and the exact name is the
+   * fallback, so a lookup never loses what the scoped reading finds; without it, both are returned.
+   * A name ending in a file extension is not split when a file of that path exists.
+   */
+  private findSymbolsByName(fullName: string, repo: string | undefined, one: boolean): Record<string, any>[] {
+    const select = (first: boolean, sql: string, ...params: string[]): Record<string, any>[] => {
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      if (!first) return this.backend.prepare(sql).all(...params);
+      const row = this.backend.prepare(`${sql} LIMIT 1`).get(...params);
+      return row ? [row] : [];
+    };
+    const exact = () => select(one, 'SELECT * FROM symbols WHERE name = ?', fullName);
+
+    let scope: string | null = null;
+    let name = fullName;
     if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
-      if (repo) {
-        return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
+      const parts = fullName.split('::');
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (fullName.includes('.')) {
+      const parts = fullName.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      // `Runner.go` is a method `go`, unless `Runner.go` is a scanned file.
+      if (!commonExtensions.has(last) || !this.getFile(fullName)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
       }
-      return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
-    } else {
-      if (repo) {
-        return this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ? LIMIT 1').get(fullName, repo);
-      }
-      return this.backend.prepare('SELECT * FROM symbols WHERE name = ? LIMIT 1').get(fullName);
     }
+    if (!scope) return exact();
+
+    let scoped = select(one, 'SELECT * FROM symbols WHERE scope = ? AND name = ?', scope, name);
+    if (scoped.length === 0) {
+      // Fallback with normalized scope matching
+      const candidates = select(false, 'SELECT * FROM symbols WHERE name = ?', name);
+      const normScope = scope.replace(/\./g, '::');
+      scoped = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
+      if (one) scoped = scoped.slice(0, 1);
+    }
+    if (one) return scoped.length > 0 ? scoped : exact();
+    const seen = new Set(scoped.map(s => s.id));
+    return [...scoped, ...exact().filter(s => !seen.has(s.id))];
+  }
+
+  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+    return this.findSymbolsByName(fullName, repo, true)[0];
   }
 
   getFilesFiltered(options: {
@@ -723,8 +1148,17 @@ export class Store {
     const params: any[] = [];
 
     if (options.pathPrefix) {
-      sql += ' AND path LIKE ?';
-      params.push(`${options.pathPrefix}%`);
+      const raw = options.pathPrefix;
+      // Glob pattern: convert to SQL LIKE (*, ? → %, _)
+      const isGlob = raw.includes('*') || raw.includes('?');
+      if (isGlob) {
+        const likePattern = raw.replace(/\*/g, '%').replace(/\?/g, '_');
+        sql += ' AND path LIKE ?';
+        params.push(likePattern);
+      } else {
+        sql += ' AND path LIKE ?';
+        params.push(`${raw}%`);
+      }
     }
 
     if (options.lang) {
@@ -750,26 +1184,7 @@ export class Store {
   }
 
   getCallersOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
-    let symbols: Record<string, any>[] = [];
-    if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
-      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
-      const params = [scope, name];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    } else {
-      let sql = 'SELECT * FROM symbols WHERE name = ?';
-      const params = [fullName];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    }
-
+    const symbols = this.findSymbolsByName(fullName, repo, false);
     if (symbols.length === 0) {
       return [];
     }
@@ -788,27 +1203,32 @@ export class Store {
     return results;
   }
 
-  getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
-    let symbols: Record<string, any>[] = [];
-    if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
-      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
-      const params = [scope, name];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    } else {
-      let sql = 'SELECT * FROM symbols WHERE name = ?';
-      const params = [fullName];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    }
+  /**
+   * Start line of `name` (or `Scope::name`) declared in `file`, or null when it is not declared there
+   * or cannot be told apart from a homonym (M0-11-R2: the first same-named declaration used to win).
+   * With several declarations of the name, the one whose scope matches `Scope::` wins; otherwise the
+   * single one whose scope is in `scopeHints` (names the caller also references in that file, such as
+   * the class it instantiates).
+   */
+  getSymbolLineInFile(file: string, name: string, scopeHints: string[] = []): number | null {
+    // `A::m`, `a.b` and PHP `App\Models\User` all end in the declared name.
+    const parts = name.split(/::|\.|\\/);
+    const short = parts.pop() ?? name;
+    const rows = this.backend
+      .prepare('SELECT start_line, scope FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line')
+      .all(file, short) as Array<{ start_line: number; scope: string | null }>;
+    if (rows.length <= 1) return rows[0]?.start_line ?? null;
+    const lastSegment = (s: string | null) => (s ?? '').split(/::|\.|\\/).pop() ?? '';
+    const pick = (scopes: string[]) => {
+      const wanted = new Set(scopes.map(lastSegment).filter(Boolean));
+      const matches = rows.filter(r => wanted.has(lastSegment(r.scope)));
+      return matches.length === 1 ? matches[0].start_line : null;
+    };
+    return (parts.length ? pick([parts[parts.length - 1]]) : null) ?? pick(scopeHints);
+  }
 
+  getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
+    const symbols = this.findSymbolsByName(fullName, repo, false);
     if (symbols.length === 0) {
       return [];
     }
@@ -827,19 +1247,157 @@ export class Store {
     return results;
   }
 
-  getTopFilesByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedFiles().slice(0, limit);
+  updateFilePageRank(filePath: string, pagerank: number): void {
+    this.backend.prepare('UPDATE files SET pagerank = ? WHERE path = ?')
+      .run(pagerank, filePath);
   }
 
-  getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedSymbols().slice(0, limit);
+  getTopFilesByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    const rows = this.backend.prepare(
+      'SELECT path, pagerank, language FROM files ORDER BY pagerank DESC LIMIT ?'
+    ).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        path: r.path,
+        pagerank: r.pagerank,
+        language: r.language
+      }));
+    }
+    if (graph && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    return [];
+  }
+
+  getTopSymbolsByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    const rows = this.backend.prepare(`
+      SELECT s.name, s.kind, s.file_path, s.start_line, s.scope,
+             (f.pagerank * (1 + (CASE WHEN s.scope IS NOT NULL THEN 2 ELSE 1 END) * 0.1)) AS pagerank
+      FROM symbols s
+      JOIN files f ON s.file_path = f.path
+      ORDER BY pagerank DESC
+      LIMIT ?
+    `).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        name: r.name,
+        kind: r.kind,
+        filePath: r.file_path,
+        startLine: r.start_line,
+        pagerank: r.pagerank,
+        scope: r.scope
+      }));
+    }
+    if (graph && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    return [];
+  }
+
+  updateFileRole(filePath: string, role: string, confidence: number): void {
+    this.backend.prepare('UPDATE files SET role = ?, role_confidence = ? WHERE path = ?')
+      .run(role, confidence, filePath);
+  }
+
+  insertClassificationSignal(signal: { filePath: string; repo: string; source: string; role: string; confidence: number; reason: string }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO classification_signals (file_path, repo, source, role, confidence, reason)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(signal.filePath, signal.repo, signal.source, signal.role, signal.confidence, signal.reason);
+  }
+
+  getClassificationSignals(filePath: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM classification_signals WHERE file_path = ?').all(filePath) as any[];
+  }
+
+  deleteClassificationSignalsForFile(filePath: string): void {
+    this.backend.prepare('DELETE FROM classification_signals WHERE file_path = ?').run(filePath);
+  }
+
+  insertClusterMetrics(m: {
+    clusterName: string;
+    repo: string;
+    fileCount: number;
+    afferentCoupling: number;
+    efferentCoupling: number;
+    instability: number;
+    internalEdges: number;
+    externalEdges: number;
+    cohesionRatio: number;
+    abstractness: number;
+    distanceFromMainSeq: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO cluster_metrics (
+        cluster_name, repo, file_count, afferent_coupling, efferent_coupling,
+        instability, internal_edges, external_edges, cohesion_ratio,
+        abstractness, distance_from_main_seq
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      m.clusterName, m.repo, m.fileCount, m.afferentCoupling, m.efferentCoupling,
+      m.instability, m.internalEdges, m.externalEdges, m.cohesionRatio,
+      m.abstractness, m.distanceFromMainSeq
+    );
+  }
+
+  getClusterMetrics(repo: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM cluster_metrics WHERE repo = ?').all(repo) as any[];
+  }
+
+  insertArchSmell(smell: {
+    repo: string;
+    type: string;
+    severity: string;
+    description: string;
+    involvedFiles: string[];
+    involvedClusters?: string[];
+    suggestion: string;
+  }): void {
+    this.backend.prepare(`
+      INSERT INTO arch_smells (repo, type, severity, description, involved_files, involved_clusters, suggestion)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      smell.repo,
+      smell.type,
+      smell.severity,
+      smell.description,
+      JSON.stringify(smell.involvedFiles),
+      JSON.stringify(smell.involvedClusters ?? []),
+      smell.suggestion
+    );
+  }
+
+  getArchSmells(repo: string): Record<string, any>[] {
+    const rows = this.backend.prepare('SELECT * FROM arch_smells WHERE repo = ?').all(repo) as any[];
+    return rows.map(r => ({
+      ...r,
+      involvedFiles: JSON.parse(r.involved_files),
+      involvedClusters: JSON.parse(r.involved_clusters),
+    }));
   }
 
   inTransaction<T>(fn: () => T): T {
     return this.backend.inTransaction(fn);
   }
 
+  private closeHandlers: Array<() => void> = [];
+
+  /** Runs `fn` once, when the store is closed (M4-31: the CLI drops its process listeners). */
+  onClose(fn: () => void): void {
+    this.closeHandlers.push(fn);
+  }
+
   close(): void {
-    this.backend.close();
+    try {
+      this.backend.close();
+    } finally {
+      for (const fn of this.closeHandlers.splice(0)) fn();
+    }
   }
 }

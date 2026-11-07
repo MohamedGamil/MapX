@@ -1,0 +1,9 @@
+{
+  "extends": ["./b.jsonc"],
+  "parameters": { "App": "Shop" },
+  "policy": { "inferred": "error" },
+  "layers": [
+    { "name": "Http", "selectors": [{ "path": "app/Http/**" }, { "package": "%App%/http-*" }] }
+  ],
+  "rules": { "App": ["Shared"], "Http": ["App"] }
+}

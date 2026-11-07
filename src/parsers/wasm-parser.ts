@@ -1,51 +1,13 @@
 import { Parser, Language, Query, QueryCapture } from 'web-tree-sitter';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve, dirname, join, isAbsolute } from 'node:path';
+import { resolve, dirname, join, isAbsolute, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageDefinition } from '../languages/registry.js';
 
-const __thisFile = fileURLToPath(import.meta.url);
+import { findAssetRoot } from './assets.js';
 
-/**
- * Find the root directory that contains wasm/ and queries/ subdirectories.
- *
- * Three execution contexts:
- *   1. Source/dev (tsx or bun run src/main.ts):
- *      __thisFile = /path/to/mapx/src/parsers/wasm-parser.ts  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/mapx/
- *
- *   2. npm-installed (node dist/main.js via npm bin symlink):
- *      __thisFile = /path/to/node_modules/mapx/dist/parsers/wasm-parser.js  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/node_modules/mapx/
- *
- *   3. Compiled native binary (bun build --compile):
- *      __thisFile = virtual bun:// path  → does NOT exist
- *      falls through to process.execPath-relative search
- */
-function findAssetRoot(): string {
-  if (existsSync(__thisFile) && !__thisFile.startsWith('/$bunfs') && !__thisFile.startsWith('bun:')) {
-    // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
-    return resolve(dirname(__thisFile), '..', '..');
-  }
-
-  // Compiled binary: search candidate directories for the wasm/ subdir
-  const binDir = dirname(process.execPath);
-  const candidates = [
-    binDir,                                              // assets next to binary
-    resolve(binDir, '..'),                               // dev build project root
-    resolve(binDir, '..', 'share', 'mapx'),              // XDG system: /usr/local/share/mapx
-    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
-  ];
-
-  for (const dir of candidates) {
-    if (existsSync(join(dir, 'wasm'))) return dir;
-  }
-
-  return binDir; // fallback — will produce a clear "file not found" on first use
-}
-
-const PROJECT_ROOT = findAssetRoot();
+const PROJECT_ROOT = findAssetRoot(import.meta.url);
 
 let initPromise: Promise<void> | null = null;
 
@@ -63,12 +25,35 @@ function ensureInit(): Promise<void> {
   return initPromise;
 }
 
-export async function loadLanguage(langDef: LanguageDefinition): Promise<Language> {
-  await ensureInit();
+/** Grammar files loaded in this thread, with how many times each was loaded (M4-10). */
+const grammarLoads = new Map<string, number>();
+
+export function grammarLoadCounts(): Array<{ grammar: string; loads: number }> {
+  return [...grammarLoads].map(([path, loads]) => ({ grammar: basename(path).replace(/^tree-sitter-/, '').replace(/\.wasm$/, ''), loads }));
+}
+
+/**
+ * One Language per grammar file per thread (M4-10): parsers sharing a grammar (the TypeScript and
+ * JavaScript parsers, the Vue script parser) share its Language, its compiled queries and its pooled
+ * parser. Each grammar was loaded once per user. A promise, so concurrent first uses share one load;
+ * a failed load is forgotten, so a later use retries.
+ */
+const languageByPath = new Map<string, Promise<Language>>();
+
+export function loadLanguage(langDef: LanguageDefinition): Promise<Language> {
   const wasmPath = isAbsolute(langDef.grammarWasm) ? langDef.grammarWasm : resolve(PROJECT_ROOT, langDef.grammarWasm);
-  const wasmBuffer = await readFile(wasmPath);
-  const language = await Language.load(wasmBuffer);
-  return language;
+  let loading = languageByPath.get(wasmPath);
+  if (!loading) {
+    loading = (async () => {
+      await ensureInit();
+      const language = await Language.load(await readFile(wasmPath));
+      grammarLoads.set(wasmPath, (grammarLoads.get(wasmPath) ?? 0) + 1);
+      return language;
+    })();
+    languageByPath.set(wasmPath, loading);
+    loading.catch(() => { if (languageByPath.get(wasmPath) === loading) languageByPath.delete(wasmPath); });
+  }
+  return loading;
 }
 
 export interface ParsedCaptures {
@@ -76,80 +61,127 @@ export interface ParsedCaptures {
   references: Map<string, QueryCapture[]>;
   nameByNodeId: Map<number, string>;
   scopeByNodeId: Map<number, string>;
+  /**
+   * Frees the syntax tree, which lives in WASM memory and has no finalizer: call it once the captures'
+   * nodes are no longer read. A long-lived process (`mapx serve`, a pooled worker) otherwise grows by a
+   * tree per parse (M2-08-R9).
+   */
+  dispose: () => void;
+}
+
+/**
+ * Parser pool: reuses Parser instances per Language to avoid WASM re-init overhead.
+ * Each language gets its own parser to prevent language-switching races.
+ */
+const parserPool = new Map<Language, Parser>();
+
+export function getPooledParser(language: Language): Parser {
+  let parser = parserPool.get(language);
+  if (!parser) {
+    parser = new Parser();
+    parser.setLanguage(language);
+    parserPool.set(language, parser);
+  }
+  return parser;
+}
+
+/**
+ * Compiled queries per language. Compiling a query costs far more than running it (about 130 ms
+ * for each PHP query), so each (language, query) pair is compiled once per process, as the parse
+ * workers already do; small scans and syncs parse on the main thread (M0-02-R3).
+ */
+const queryCache = new Map<Language, Map<string, Query | null>>();
+
+export function compiledQuery(language: Language, source: string): Query | null {
+  let bySource = queryCache.get(language);
+  if (!bySource) queryCache.set(language, (bySource = new Map()));
+  if (!bySource.has(source)) {
+    try {
+      bySource.set(source, new Query(language, source));
+    } catch (e: any) {
+      if (!e.message?.includes('no query')) throw e;
+      bySource.set(source, null);
+    }
+  }
+  return bySource.get(source)!;
 }
 
 export async function parseWithQueries(
   source: string,
   language: Language,
   symbolsQuery: string,
-  referencesQuery: string
+  referencesQuery: string,
+  /** Reads the syntax tree while it is alive: the ambient accesses of a file (M5-24-R1). */
+  inspect?: (root: any) => void,
 ): Promise<ParsedCaptures> {
   await ensureInit();
-  // Use a fresh parser instance per call to avoid language-switching races
-  // when multiple concurrent parses share the same instance.
-  const parser = new Parser();
-  parser.setLanguage(language);
+  // Pool parsers per language to avoid re-creating WASM instances on every parse.
+  // Each language gets its own parser to avoid language-switching races.
+  const parser = getPooledParser(language);
   const tree = parser.parse(source);
   if (!tree) {
-    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map() };
-  }
-
-  const symbolCaptures = new Map<string, QueryCapture[]>();
-  const refCaptures = new Map<string, QueryCapture[]>();
-  const nameByNodeId = new Map<number, string>();
-  const scopeByNodeId = new Map<number, string>();
-
-  try {
-    const symQuery = new Query(language, symbolsQuery);
-    const symMatches = symQuery.captures(tree.rootNode);
-    const kindNodeIds = new Set<number>();
-    for (const capture of symMatches) {
-      const existing = symbolCaptures.get(capture.name) || [];
-      existing.push(capture);
-      symbolCaptures.set(capture.name, existing);
-
-      if (capture.name.startsWith('symbol.kind_')) {
-        kindNodeIds.add(capture.node.id);
-      }
-    }
-    for (const capture of symMatches) {
-      if (capture.name === 'symbol.name') {
-        let node: any = capture.node.parent;
-        while (node) {
-          if (kindNodeIds.has(node.id)) {
-            nameByNodeId.set(node.id, capture.node.text);
-            break;
-          }
-          node = node.parent;
-        }
-      } else if (capture.name === 'symbol.scope') {
-        let node: any = capture.node.parent;
-        while (node) {
-          if (kindNodeIds.has(node.id)) {
-            scopeByNodeId.set(node.id, capture.node.text);
-            break;
-          }
-          node = node.parent;
-        }
-      }
-    }
-  } catch (e: any) {
-    if (!e.message?.includes('no query')) throw e;
+    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map(), dispose: () => {} };
   }
 
   try {
-    const refQuery = new Query(language, referencesQuery);
-    const refMatches = refQuery.captures(tree.rootNode);
-    for (const capture of refMatches) {
-      const existing = refCaptures.get(capture.name) || [];
-      existing.push(capture);
-      refCaptures.set(capture.name, existing);
-    }
-  } catch (e: any) {
-    if (!e.message?.includes('no query')) throw e;
-  }
+    const symbolCaptures = new Map<string, QueryCapture[]>();
+    const refCaptures = new Map<string, QueryCapture[]>();
+    const nameByNodeId = new Map<number, string>();
+    const scopeByNodeId = new Map<number, string>();
 
-  return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId };
+    const symQuery = compiledQuery(language, symbolsQuery);
+    if (symQuery) {
+      const symMatches = symQuery.captures(tree.rootNode);
+      const kindNodeIds = new Set<number>();
+      for (const capture of symMatches) {
+        const existing = symbolCaptures.get(capture.name) || [];
+        existing.push(capture);
+        symbolCaptures.set(capture.name, existing);
+
+        if (capture.name.startsWith('symbol.kind_')) {
+          kindNodeIds.add(capture.node.id);
+        }
+      }
+      for (const capture of symMatches) {
+        if (capture.name === 'symbol.name') {
+          let node: any = capture.node.parent;
+          while (node) {
+            if (kindNodeIds.has(node.id)) {
+              nameByNodeId.set(node.id, capture.node.text);
+              break;
+            }
+            node = node.parent;
+          }
+        } else if (capture.name === 'symbol.scope') {
+          let node: any = capture.node.parent;
+          while (node) {
+            if (kindNodeIds.has(node.id)) {
+              scopeByNodeId.set(node.id, capture.node.text);
+              break;
+            }
+            node = node.parent;
+          }
+        }
+      }
+    }
+
+    const refQuery = compiledQuery(language, referencesQuery);
+    if (refQuery) {
+      const refMatches = refQuery.captures(tree.rootNode);
+      for (const capture of refMatches) {
+        const existing = refCaptures.get(capture.name) || [];
+        existing.push(capture);
+        refCaptures.set(capture.name, existing);
+      }
+    }
+
+    inspect?.(tree.rootNode);
+
+    return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId, dispose: () => tree.delete() };
+  } catch (e) {
+    tree.delete();
+    throw e;
+  }
 }
 
 export async function loadQueryFile(queryPath: string): Promise<string> {

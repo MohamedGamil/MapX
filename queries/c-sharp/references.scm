@@ -1,14 +1,14 @@
 ; C# Reference Extraction Queries
 
 ; Using directives
-(using_directive name: [(identifier) (qualified_name)] @ref.target_import) @ref.type_import
+; `using Lib.Models;` (the `name` field only exists on aliases: using X = Y)
+(using_directive !name [(identifier) (qualified_name)] @ref.target_import) @ref.type_import
+; `using M = Lib.Models;` (M0-12-R4): the aliased name follows the alias
+(using_directive name: (identifier) . [(identifier) (qualified_name)] @ref.target_import) @ref.type_import
 
 ; Class/struct inheritance: class Foo : Bar
 (base_list
-  (simple_base_type (identifier) @ref.target_extends)) @ref.type_extends
-
-(base_list
-  (simple_base_type (generic_name (identifier) @ref.target_extends))) @ref.type_extends
+  (_) @ref.target_extends) @ref.type_extends
 
 ; Method calls
 (invocation_expression

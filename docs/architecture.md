@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across two tiers (built-in, bundled) and provides **26 MCP tools** for LLM integration.
+MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **23 languages** across two tiers (built-in, bundled), plus five static file types indexed for their links, and provides **39 MCP tools** for LLM integration. On top of the graph it records references to packages outside the workspace and checks declared architecture rules ([architecture-rules.md](architecture-rules.md)).
 
 
 <!-- ![Architecture Diagram](./images/01-arch.png) -->
@@ -78,7 +78,7 @@ Walks the filesystem, detects languages, orchestrates parsing, and stores result
 
 Uses `graphology` directed multigraph with PageRank centrality.
 
-- **Nodes**: Files and symbols (classes, methods, functions, interfaces, enums, structs, modules, constants, properties, namespaces, traits)
+- **Nodes**: Files and symbols (classes, methods, functions, interfaces, enums, structs, modules, constants, properties, variables, namespaces, traits)
 - **Edges**: Dependencies (import, require, extends, implements, call, instantiation, use, include)
 - **PageRank**: Computed on-demand to rank files/symbols by structural importance
 - **Serialization**: Can export/import the full graph as JSON
@@ -102,7 +102,7 @@ SQLite abstraction with two backends:
 
 Both backends are opened with `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 5000` so concurrent readers/writers wait up to 5 seconds instead of failing immediately with `SQLITE_BUSY`.
 
-Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`
+Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`, `clusters`, `cluster_membership`, `cluster_metrics`, `classification_signals`, `arch_smells` and `external_ref_candidates`, with the `external_refs` view (each reference to a package, built-in or ambient name outside the workspace, with its package attribution). The schema is versioned and migrated on open; the index also records the extractor version that built it, so an index from an older MapX is re-parsed once, and the version of the external-reference attribution rules, so a change to those rules alone re-attributes the stored references on the next sync without re-parsing.
 
 The `meta` table stores scan state including:
 - `last_scan_time` / `last_scan_commit` — For incremental change detection
@@ -110,19 +110,19 @@ The `meta` table stores scan state including:
 
 ### Language Registry (`src/languages/registry.ts`)
 
-Central registry of all 22 supported languages with two tiers:
+Central registry of all 23 supported languages with two tiers:
 
 | Tier | Languages | WASM Path | Query Path |
 |------|-----------|-----------|------------|
 | **built-in** | PHP, JS, TS, Python, Go, Rust, Java, C# | `wasm/` (relative) | `queries/` (relative) |
-| **bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal | `wasm/` (relative) | `queries/` (relative) |
+| **bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Fish, Pascal | `wasm/` (relative) | `queries/` (relative) |
 
 Each language entry defines:
 - `extensions` — File extensions to match
 - `grammarWasm` — Path to tree-sitter WASM grammar
 - `queries` — Paths to `symbols.scm` and `references.scm` query files
 - `nodeMappings` — Maps `SymbolKind` values to AST node types for scope resolution and container detection
-- `tier` — `built-in` or `bundled`
+- `tier` — `built-in`, `bundled` or `static` (Markdown, HTML, CSS, JSON and YAML: links only, no grammar)
 
 ### Parsers (`src/parsers/`)
 
@@ -182,11 +182,23 @@ Manages multi-repository workspaces:
 
 ### MCP Server (`src/mcp.ts`)
 
-Model Context Protocol server with 25 tools:
+Model Context Protocol server with 39 tools:
 
 - **Transports**: stdio (default) and SSE (HTTP)
-- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_install, lang_uninstall
+- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_info, lang_install, lang_uninstall, profile, explain, smells, dsm, layers, routes, hooks, edges, metrics, agents_generate, batch, arch_validate_config, arch_check, arch_layers, arch_allowed, arch_explain, arch_init (the last five in `src/arch/mcp-tools.ts`, M5-14)
 - Configuration snippet generation for Claude Desktop, Cursor, VS Code, and opencode
+
+### Parse Worker Pool (`src/core/worker-pool.ts`)
+
+Parses files on worker threads when the work repays them: the pool is sized per batch from the bytes to parse, the CPUs and the available memory, files are shared out by language so each worker loads only the grammars it needs, and `mapx serve` keeps one pool across calls. See [Parallel parsing](configuration.md#parallel-parsing).
+
+### External References (`src/core/external-refs.ts`, `src/core/manifests/`)
+
+Records every import, call or type reference to something outside the workspace and attributes it to a package from the npm, Composer, pypi (pip, Poetry, uv) or Go manifests and lockfiles, or classifies it as a built-in or ambient access (`process.env`, `window`, `$_GET`, `os.environ`, `os.Getenv`: syntax-tree walks in `src/parsers/ambient.ts`, M5-24-R1). See [External dependencies](architecture-rules.md#external-dependencies-packages-built-ins-ambient-access).
+
+### Architecture Rules (`src/arch/`)
+
+Loads and validates `.mapx/architecture.jsonc` (`config.ts`, `schema.ts`), maps files, symbols and external elements to layers through selectors (`elements.ts`, `selectors/`, `membership.ts`), evaluates every dependency against the rules (`evaluate.ts`, `report.ts`), applies baselines (`baseline.ts`), renders the reports and layer graphs (`reporters/`), derives smells (`smells.ts`), proposes configurations (`infer.ts`, `presets/`) and serves `mapx check`, `mapx arch …` and the architecture MCP tools (`check.ts`, `introspect.ts`, `mcp-tools.ts`). See [architecture-rules.md](architecture-rules.md).
 
 ### CLI Progress Display (`src/cli.ts`)
 
@@ -196,6 +208,74 @@ Visual progress for scan operations:
 - **Parse phase**: Progress bar with percentage and file name
 - **Update command**: Change detection + parse progress for changed files
 - Phase transitions marked with checkmarks
+
+## Smart Architecture Classification Subsystem
+
+To move beyond simple path-only layer classification, MapxGraph implements a smart, dynamic classification and analysis subsystem that automatically profiles the project architecture, scores file roles using multiple signals, partitions components using community detection, and detects architectural design smells.
+
+```mermaid
+graph TD
+    subgraph "Adaptive Classification"
+        A[CodebaseProfiler] --> B[AdaptiveTaxonomy]
+        B --> C[MultiSignalClassifier]
+        C --> D[LayerResult per file]
+    end
+
+    subgraph "Graph Intelligence"
+        E[LeidenCommunityDetector] --> F[HierarchicalClusters]
+        F --> G[ClusterMetrics]
+    end
+
+    subgraph "Architecture Analysis"
+        H[SmellDetector] --> I[CycleDetector]
+        H --> J[HubDetector]
+        H --> K[LayerViolationDetector]
+        G --> L[DependencyMatrix / DSM]
+    end
+
+    subgraph "Surfaces"
+        D --> M[Enhanced MCP Tools]
+        D --> N[UI Views]
+        D --> O[Context Builder]
+        L --> M
+        L --> N
+        H --> M
+    end
+```
+
+### 1. Codebase Profiler (`src/core/codebase-profiler.ts`)
+Analyzes the overall composition of the project on a full scan to identify its **archetype** and active architectural patterns.
+* **Archetypes**: `cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, `mobile-app`, or `mixed`.
+* **Heuristics**: Scans directory layouts, file extensions, framework imports, entry points, and workspace package structures.
+
+### 2. Adaptive Layer Taxonomy & Multi-Signal Classifier (`src/core/role-classifier.ts`)
+Replaces rigid category sets with composable, archetype-aware **File Roles** scored using a weighted multi-signal engine:
+* **Taxonomy Groups**:
+  * *Universal*: `entry`, `config`, `types`, `shared`, `test`, `docs`, `other`.
+  * *Backend*: `api`, `middleware`, `service`, `data`, `integration`, `auth`.
+  * *Frontend*: `pages`, `components`, `state`, `hooks`, `styles`, `assets`.
+  * *Tool/Library*: `cli`, `core`, `parsers`, `plugins`.
+* **Weighted Signals**:
+  * **Path Analysis** (30% weight) - Matches file paths to archetype-specific directory structures.
+  * **Symbol Naming** (25% weight) - Analyzes prefix and suffix patterns (e.g. `*Controller` $\rightarrow$ `api`, `use*` $\rightarrow$ `hooks`).
+  * **Dependency Topology** (20% weight) - Examines fan-in, fan-out, leaf dependencies, and centrality.
+  * **Framework Bindings** (15% weight) - Correlates files to route and hook bindings.
+  * **Import Direction** (10% weight) - Analyzes library dependencies (e.g. ORM imports $\rightarrow$ `data`).
+
+### 3. Leiden Community Detector (`src/core/leiden.ts`)
+Identifies logical modular clusters in pure TypeScript based on the **Leiden algorithm**:
+* **Connectivity Guarantee**: Ensures all returned communities are strictly connected.
+* **Deterministic Refinement**: Modularity optimization with configurable resolution control.
+* **Hierarchical Zooming**: Supports nested parent-child communities for multi-level graph navigation.
+
+### 4. Architecture Analyzer & Flow Validator (`src/core/architecture-analyzer.ts`, `src/core/flow-validator.ts`)
+Inspects structural health and warns of anti-patterns:
+* **Architectural Smells**:
+  * `cyclic-dependency` - Detects circular references using Tarjan's SCC.
+  * `hub-component` - Identifies high fan-in / high fan-out god files.
+  * `layer-violation` - Highlights dependencies violating expected hierarchical flow (e.g., `data` layer importing `api`).
+  * `unstable-dependency` - Flags stable components depending on unstable ones.
+* **Dependency Structure Matrix (DSM)**: Computes a cluster-to-cluster dependency heatmap to surface coupling, cohesion ratios, and Martin's package metrics (Abstractness, Instability, Distance from Main Sequence).
 
 ## Data Flow
 
@@ -208,7 +288,7 @@ Visual progress for scan operations:
 7. `trace` → FlowTracer walks call/dependency chains → Returns flow paths
 8. `impact` → FlowTracer computes blast radius → Returns affected symbols with risk scores
 9. `callers`/`callees` → FlowTracer traces call chains in specified direction
-10. `serve` → Starts MCP server → Exposes all functionality as 25 tools
+10. `serve` → Starts MCP server → Exposes all functionality as 39 tools
 
 ## Process Flow Diagrams
 

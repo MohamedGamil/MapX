@@ -1,7 +1,41 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
 import { DotExporter } from './dot-exporter.js';
+
+/** How long Graphviz may run: `MAPX_GRAPHVIZ_TIMEOUT_MS`, default 10 s. */
+export function graphvizTimeout(env: NodeJS.ProcessEnv = process.env): number {
+  const ms = Number(env.MAPX_GRAPHVIZ_TIMEOUT_MS);
+  return Number.isFinite(ms) && ms > 0 ? ms : 10_000;
+}
+
+/**
+ * Renders DOT with Graphviz (`dot -Tsvg`); null when Graphviz is not installed, fails, runs past
+ * `graphvizTimeout()` (it is killed), or prints no SVG, so the caller falls back to its own
+ * renderer (shared with the layer graph, M5-13; the timeout and the output check: review of M5-13).
+ */
+export function graphvizSvg(dot: string): string | null {
+  try {
+    const out = execFileSync('dot', ['-Tsvg'], {
+      input: dot,
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: graphvizTimeout(),
+      killSignal: 'SIGKILL',
+    });
+    return /<svg[\s>]/.test(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** SVG text and attribute values: the XML specials escaped, characters XML 1.0 cannot carry as U+FFFD. */
+export function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '�');
+}
 
 export class SvgExporter {
   private store: Store;
@@ -19,16 +53,7 @@ export class SvgExporter {
     const dotExporter = new DotExporter(this.store, this.graph);
     const dot = dotExporter.export(repo, filesFilter, opts);
 
-    try {
-      return execSync('dot -Tsvg', {
-        input: dot,
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch {
-      return this.renderFallback(repo, filesFilter, opts);
-    }
+    return graphvizSvg(dot) ?? this.renderFallback(repo, filesFilter, opts);
   }
 
   private renderFallback(repo?: string, filesFilter?: string[], opts?: { cluster?: 'none' | 'auto'; depth?: number; forceFallback?: boolean }): string {
@@ -262,18 +287,23 @@ export class SvgExporter {
       svgH = MARGIN * 2 + rows * ITEM_H + (rows - 1) * GAP_Y;
     }
 
-    const edgeStyles: Record<string, { stroke: string; dash: string }> = {
+    // Same convention as the DOT exporter: a dashed line means inferred (F01), so verified types
+    // are told apart by colour, dots and weight; dispatch and notify had no style at all and
+    // were drawn like imports (M0-08-R1).
+    const edgeStyles: Record<string, { stroke: string; dash: string; width?: number }> = {
       import: { stroke: '#64748b', dash: '' },
       require: { stroke: '#64748b', dash: '' },
-      extends: { stroke: '#3b82f6', dash: '' },
-      implements: { stroke: '#10b981', dash: '4,4' },
-      call: { stroke: '#f59e0b', dash: '3,3' },
-      instantiation: { stroke: '#8b5cf6', dash: '3,3' },
-      relation: { stroke: '#3b82f6', dash: '' },
+      extends: { stroke: '#3b82f6', dash: '', width: 2 },
+      implements: { stroke: '#10b981', dash: '' },
+      call: { stroke: '#f59e0b', dash: '1,3' },
+      instantiation: { stroke: '#8b5cf6', dash: '1,3' },
+      relation: { stroke: '#3b82f6', dash: '', width: 2 },
       route: { stroke: '#10b981', dash: '' },
-      binding: { stroke: '#8b5cf6', dash: '4,4' },
-      middleware: { stroke: '#f97316', dash: '2,2' },
-      render: { stroke: '#06b6d4', dash: '3,3' },
+      binding: { stroke: '#8b5cf6', dash: '' },
+      middleware: { stroke: '#f97316', dash: '1,3' },
+      dispatch: { stroke: '#d946ef', dash: '', width: 2 },
+      notify: { stroke: '#ec4899', dash: '1,3' },
+      render: { stroke: '#06b6d4', dash: '1,3' },
     };
 
     const seen = new Set<string>();
@@ -301,7 +331,7 @@ export class SvgExporter {
       const midY = (sy + ty) / 2;
 
       edgeLines.push(
-        `  <path d="M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}" fill="none" stroke="${style.stroke}" stroke-width="1.2"${dashAttr} opacity="0.35" class="edge-path" marker-end="url(#arrow)"/>`,
+        `  <path d="M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}" fill="none" stroke="${style.stroke}" stroke-width="${style.width ?? 1.2}"${dashAttr} opacity="0.35" class="edge-path" marker-end="url(#arrow)"/>`,
       );
     }
 

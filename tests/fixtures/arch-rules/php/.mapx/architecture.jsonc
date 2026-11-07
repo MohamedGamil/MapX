@@ -1,0 +1,83 @@
+// M5-01 fixture: PHP. Layers by path and by namespace (name), with a %parameter%.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "parameters": {
+    "App": "App"
+  },
+  "layers": [
+    {
+      "name": "Controller",
+      "selectors": [
+        {
+          "path": "app/Controller/**"
+        }
+      ]
+    },
+    {
+      "name": "Application",
+      "selectors": [
+        {
+          "name": "^%App%\\\\Application\\\\"
+        }
+      ],
+      "private": [
+        {
+          "name": "^%App%\\\\Application\\\\Internal\\\\"
+        }
+      ]
+    },
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "name": "^%App%\\\\Domain\\\\"
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "selectors": [
+        {
+          "path": "app/Shared/**"
+        },
+        {
+          "path": "app/Domain/Ids/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "app/Infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "description": "Matches nothing: the empty-layer warning",
+      "selectors": [
+        {
+          "path": "app/Reporting/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Controller": [
+      "Application"
+    ],
+    "Application": [
+      "+Domain"
+    ],
+    "Domain": [
+      "Shared"
+    ],
+    "Infrastructure": [
+      "Domain",
+      "Shared"
+    ],
+    "Shared": []
+  },
+  "baseline": ".mapx/architecture.baseline.json"
+}

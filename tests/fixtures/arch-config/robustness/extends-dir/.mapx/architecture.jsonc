@@ -1,0 +1,5 @@
+// Synthetic (M5-02-R1): "extends" names the views directory, not a document in it.
+{
+  "extends": "./architecture",
+  "layers": [{ "name": "App", "selectors": [{ "path": "src/**" }] }]
+}

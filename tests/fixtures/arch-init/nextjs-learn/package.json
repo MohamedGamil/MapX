@@ -1,0 +1,6 @@
+{
+  "name": "m5-17-r1-nextjs-learn-fixture",
+  "private": true,
+  "description": "Synthetic Next.js Learn-style app for M5-17-R1. Not a real application.",
+  "dependencies": { "next": "^14.2.0", "react": "^18.3.0" }
+}

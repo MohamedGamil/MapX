@@ -1,0 +1,11 @@
+{
+  "name": "arch-ts-vendor",
+  "private": true,
+  "dependencies": {
+    "express": "^4.19.0",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "lodash": "^4.17.21"
+  }
+}

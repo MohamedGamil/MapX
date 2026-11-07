@@ -1,0 +1,96 @@
+// M5-01 fixture: TypeScript. Layers by path; role and cluster selectors narrow two of them.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    {
+      "name": "Controller",
+      "selectors": [
+        {
+          "all": [
+            {
+              "path": "src/controller/**"
+            },
+            {
+              "not": {
+                "role": "test"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Application",
+      "selectors": [
+        {
+          "path": "src/application/**"
+        }
+      ],
+      "private": [
+        {
+          "path": "src/application/internal/**"
+        }
+      ]
+    },
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "all": [
+            {
+              "path": "src/domain/**"
+            },
+            {
+              "not": {
+                "cluster": "tests"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "selectors": [
+        {
+          "path": "src/shared/**"
+        },
+        {
+          "path": "src/domain/ids/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "src/infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "selectors": [
+        {
+          "path": "src/reporting/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Controller": [
+      "Application"
+    ],
+    "Application": [
+      "+Domain"
+    ],
+    "Domain": [
+      "Shared"
+    ],
+    "Infrastructure": [
+      "Domain",
+      "Shared"
+    ],
+    "Shared": []
+  }
+}

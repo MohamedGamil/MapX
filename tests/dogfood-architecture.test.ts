@@ -1,0 +1,158 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { validateArchitectureConfig } from '../src/arch/config.js';
+import { loadBaseline } from '../src/arch/baseline.js';
+import { DEFAULT_SCOPE_TYPES } from '../src/arch/schema.js';
+import { cleanup, init, mapx, mapxResult, workspace } from './helpers/e2e.js';
+
+// MapX checks its own architecture in CI (M5-18): .mapx/architecture.jsonc and its baseline are
+// committed, while the rest of .mapx/ stays ignored (D030). The check itself runs in the CI job; these
+// tests keep the pieces it needs in place.
+const ROOT = join(new URL('..', import.meta.url).pathname);
+
+describe("MapX's own architecture configuration", () => {
+  it('is valid, with the layers of the research map (§3.9) plus Arch, and an Outside guard', () => {
+    const { report, config } = validateArchitectureConfig(ROOT);
+    expect(report.issues).toEqual([]);
+    expect(config!.layers.map((l) => l.name)).toEqual([
+      'Entry', 'UI', 'Agents', 'Arch', 'Exporters', 'Core', 'Frameworks', 'Parsers', 'Languages', 'Shared', 'Packages', 'Outside',
+    ]);
+    // M5-24: runtime npm packages are a layer every layer may use; a dev-only one is uncovered.
+    expect(config!.layers.find((l) => l.name === 'Packages')!.selectors).toEqual([{ package: '*', dev: false }]);
+    expect(config!.rules['*']).toContain('Packages');
+    // Tests and scripts are in scope only as targets: an overlay every layer denies, so production code
+    // may not import them, while their own imports (sources in no layer) are never judged.
+    expect(config!.scope.include).toEqual(['src/**', 'tests/**', 'scripts/**']);
+    // Fixtures are in scope again (M5-18-R2): M2-25 and M2-26 removed the false edges that kept them out.
+    expect(config!.scope.exclude).toEqual([]);
+    const outside = config!.layers.find((l) => l.name === 'Outside')!;
+    expect(outside.overlay).toBe(true);
+    expect(outside.selectors).toEqual([{ path: '{tests,scripts}/**' }]);
+    expect(config!.rules['*']).toContain('!Outside');
+    // Every dependency type is judged, calls and type references too (M5-18-R1).
+    expect(config!.scope.types).toEqual([...DEFAULT_SCOPE_TYPES]);
+    expect(config!.scope.types).toContain('call');
+  });
+
+  it('has a baseline that parses, holding the Languages → Parsers and Agents → Parsers findings', () => {
+    const { config } = validateArchitectureConfig(ROOT);
+    const baseline = loadBaseline(ROOT, config!)!;
+    expect(baseline.file).toBe('.mapx/architecture.baseline.json');
+    const pairs = baseline.entries.map((e) => `${e.source} → ${e.target} (${e.edgeType})`);
+    expect(pairs).toContain('src/languages/installer.ts → src/parsers/assets.ts (import)');
+    expect(pairs).toContain('src/agents/generator.ts → src/parsers/static-file-parser.ts (import)');
+  });
+});
+
+// M5-18-R1: the check judges calls, not only imports. A probe workspace under MapX's own configuration:
+// a Frameworks module imports a Parsers helper (frozen in a baseline), then calls it. Only the call is
+// new, and it fails the check.
+describe("MapX's own configuration judges calls (real scan)", () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      '.mapx/architecture.jsonc': readFileSync(join(ROOT, '.mapx/architecture.jsonc'), 'utf8'),
+      'src/parsers/helper.ts': 'export function helper(): number { return 1; }\n',
+      'src/frameworks/probe.ts': "import { helper } from '../parsers/helper.js';\nexport const probe = helper;\nexport function use(): number { return 0; }\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120_000);
+  afterAll(() => cleanup(root));
+
+  it('fails on a call across a forbidden layer whose import is baselined', () => {
+    // The import alone (Frameworks on Parsers) is a violation; freeze it, as MapX's baseline does.
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(1);
+    expect(mapxResult(root, 'check', '--generate-baseline').status).toBe(0);
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(0);
+    // A call of the helper adds a call edge across the same forbidden pair.
+    writeFileSync(join(root, 'src/frameworks/probe.ts'), "import { helper } from '../parsers/helper.js';\nexport const probe = helper;\nexport function use(): number { return helper(); }\n");
+    mapx(root, 'scan', root);
+    const r = mapxResult(root, 'check', '--fail-on-uncovered');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/src\/frameworks\/probe\.ts#use → src\/parsers\/helper\.ts#helper \(call\)/);
+  });
+});
+
+// M5-18-R2: tests/fixtures/** is in scope, so production code importing a fixture is judged (Outside).
+describe("MapX's own configuration judges imports of fixtures (real scan)", () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      '.mapx/architecture.jsonc': readFileSync(join(ROOT, '.mapx/architecture.jsonc'), 'utf8'),
+      'tests/fixtures/sample/thing.ts': 'export function thing(): number { return 1; }\n',
+      'src/core/probe.ts': 'export function use(): number { return 0; }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120_000);
+  afterAll(() => cleanup(root));
+
+  it('fails on a src module importing a fixture, and passes without the import', () => {
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(0);
+    writeFileSync(join(root, 'src/core/probe.ts'), "import { thing } from '../../tests/fixtures/sample/thing.js';\nexport function use(): number { return thing(); }\n");
+    mapx(root, 'scan', root);
+    const r = mapxResult(root, 'check', '--fail-on-uncovered');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/src\/core\/probe\.ts#use → tests\/fixtures\/sample\/thing\.ts#thing \(import\)[\s\S]*\(Core on Outside\)/);
+  });
+});
+
+const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+let inGit = true;
+try {
+  git('rev-parse', '--is-inside-work-tree');
+} catch {
+  inGit = false;
+}
+
+describe.skipIf(!inGit)('.gitignore keeps only the configuration and baseline of .mapx/', () => {
+  it('ignores the index and every other file a scan writes, at the root and in nested workspaces', () => {
+    const paths = [
+      '.mapx/architecture.jsonc', '.mapx/architecture.baseline.json',
+      '.mapx/mapx.db', '.mapx/config.json', '.mapx/tool-calls.jsonl', '.mapx/architecture/view.jsonc',
+      'packages/app/.mapx/architecture.jsonc',
+    ];
+    // `-v --non-matching` prints every path with the pattern that decided it (empty when none did).
+    const out = git('check-ignore', '--no-index', '-v', '--non-matching', ...paths);
+    const ignored = new Map(out.trim().split('\n').map((line) => {
+      const [where, path] = line.split('\t');
+      const pattern = where.split(':').slice(2).join(':');
+      return [path, pattern !== '' && !pattern.startsWith('!')] as const;
+    }));
+    expect(Object.fromEntries(ignored)).toEqual({
+      '.mapx/architecture.jsonc': false,
+      '.mapx/architecture.baseline.json': false,
+      '.mapx/mapx.db': true,
+      '.mapx/config.json': true,
+      '.mapx/tool-calls.jsonl': true,
+      '.mapx/architecture/view.jsonc': true,
+      'packages/app/.mapx/architecture.jsonc': true,
+    });
+  });
+});
+
+describe('CI workflow', () => {
+  it('has an Architecture job that indexes MapX and runs mapx check, keeping SARIF as an artifact', () => {
+    const ci = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const job = ci.match(/^ {2}architecture:\n((?: {4,}.*\n|\n)+)/m)?.[1] ?? '';
+    expect(job).toMatch(/^ {4}name: Architecture$/m);
+    expect(job).toMatch(/^ {4}needs: lint$/m);
+    const steps = [
+      'run: npm ci --legacy-peer-deps',
+      'run: npm run build:npm',
+      'node dist/main.js init . --no-agents --no-suggestions --no-mcp-configs',
+      'node dist/main.js scan .',
+      'run: node dist/main.js check --fail-on-uncovered --format github',
+      'run: node dist/main.js check --fail-on-uncovered --report-skipped --format sarif -o mapx-architecture.sarif',
+      'path: mapx-architecture.sarif',
+    ].map((s) => job.indexOf(s));
+    expect(steps.every((i) => i > -1)).toBe(true);
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+    // No code-scanning upload: fork pull requests never get `security-events: write`.
+    const code = ci.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+    expect(code).not.toMatch(/security-events|upload-sarif/);
+  });
+});

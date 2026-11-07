@@ -1,0 +1,9 @@
+{
+  "extends": "./a.jsonc",
+  "layers": [
+    // Overrides a.jsonc's Shared, which keeps its position.
+    { "name": "Shared", "selectors": [{ "path": "packages/shared/**" }] },
+    { "name": "App", "selectors": [{ "path": "app/**" }] }
+  ],
+  "rules": { "Domain": ["Shared"], "App": ["+Domain"] }
+}

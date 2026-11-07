@@ -1,0 +1,19 @@
+{
+  "name": "arch-ts",
+  "private": true,
+  "dependencies": {
+    "@acme/logging": "^1.2.0",
+    "express": "^4.19.0",
+    "pg": "^8.11.0",
+    "sqlite": "^5.1.0"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "lodash": "^4.17.21",
+    "react": "^18.3.0",
+    "reflect-metadata": "^0.2.0"
+  }
+}

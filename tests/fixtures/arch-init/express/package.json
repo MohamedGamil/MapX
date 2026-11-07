@@ -1,0 +1,6 @@
+{
+  "name": "m5-17-r1-express-fixture",
+  "private": true,
+  "description": "Synthetic Express app for M5-17-R1. Not a real application.",
+  "dependencies": { "express": "^4.19.0" }
+}

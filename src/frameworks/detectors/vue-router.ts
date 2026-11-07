@@ -2,26 +2,24 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import { hasPackageJsonDependency } from '../utils.js';
+import { componentBindings } from '../../parsers/languages/vue-navigation.js';
+import { vueComponentName } from '../../parsers/languages/vue-template.js';
+
+/** Resolves a route's component, by local binding or by module specifier, to a file (M3-06). */
+interface ComponentResolver {
+  binding(symbol: string): string | null;
+  module(specifier: string): string | null;
+}
 
 export class VueRouterDetector implements FrameworkDetector {
   readonly name = 'vue-router';
   readonly language = 'typescript';
   readonly filePattern = /\.(js|ts|vue)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['vue-router', 'vue'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    const packageJsonPath = join(projectRoot, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if (deps && (deps['vue-router'] || deps['vue'])) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return false;
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {
@@ -30,6 +28,19 @@ export class VueRouterDetector implements FrameworkDetector {
     if (!content.includes('VueRouter') && !content.includes('createRouter') && !content.includes('routes') && !content.includes('routerMap') && !content.includes('routeMap')) {
       return [];
     }
+
+    // A component resolves through the router file's own import of it (`import Home from '…'`,
+    // `const Home = () => import('…')`), never to the router file merely because it names it (M3-06).
+    let bindings: Map<string, string> | null = null;
+    const resolver: ComponentResolver = {
+      binding: (symbol) => {
+        const specifier = (bindings ??= componentBindings(content)).get(symbol);
+        // An import that does not resolve (a package) falls back to the router file, as before.
+        if (specifier) return ctx.resolveImport?.(specifier, filePath) ?? null;
+        return ctx.resolveSymbolToFile(symbol);
+      },
+      module: (specifier) => ctx.resolveImport?.(specifier, filePath) ?? null,
+    };
 
     // Locate "routes: [", "routes = [", "routerMap = [", "routeMap: [", etc.
     let index = 0;
@@ -44,7 +55,7 @@ export class VueRouterDetector implements FrameworkDetector {
         continue;
       }
 
-      const parsedRoutes = this.parseRoutesArray(arrayObj.content, filePath, ctx);
+      const parsedRoutes = this.parseRoutesArray(arrayObj.content, filePath, ctx, [], resolver);
       routes.push(...parsedRoutes);
 
       index = arrayObj.endIndex;
@@ -53,7 +64,7 @@ export class VueRouterDetector implements FrameworkDetector {
     return routes;
   }
 
-  private parseRoutesArray(content: string, filePath: string, ctx: ScanContext, prefixParts: string[] = []): RouteBinding[] {
+  private parseRoutesArray(content: string, filePath: string, ctx: ScanContext, prefixParts: string[] = [], resolver?: ComponentResolver): RouteBinding[] {
     const routes: RouteBinding[] = [];
     let index = 0;
 
@@ -69,30 +80,37 @@ export class VueRouterDetector implements FrameworkDetector {
 
       // Parse current route object
       const objBody = obj.content;
-      const pathMatch = objBody.match(/\bpath\s*:\s*['"`]([^'"`]*)['"`]/);
+      // The record's own properties, without its children (parsed below as records of their own):
+      // a child's lazy import or named views are not the parent's component (M3-06).
+      let ownBody = objBody;
+      const childrenAt = objBody.match(/\bchildren\s*:\s*\[/);
+      const childrenBody = childrenAt ? getBracketedContent(objBody, childrenAt.index! + childrenAt[0].length - 1) : null;
+      if (childrenAt && childrenBody) ownBody = objBody.slice(0, childrenAt.index) + objBody.slice(childrenBody.endIndex);
+      const pathMatch = ownBody.match(/\bpath\s*:\s*['"`]([^'"`]*)['"`]/);
       const pathVal = pathMatch ? pathMatch[1] : '';
 
       // Try matching component or components
       const componentsList: { symbol: string, file: string }[] = [];
 
       // 1. Single component matches: component: ComponentName
-      const compMatch = objBody.match(/\bcomponent\s*:\s*([a-zA-Z0-9_]+)\b(?!\s*=>)/);
+      const compMatch = ownBody.match(/\bcomponent\s*:\s*([a-zA-Z0-9_]+)\b(?!\s*=>)/);
       if (compMatch && compMatch[1] !== 'import' && compMatch[1] !== 'require') {
         const componentSymbol = compMatch[1];
         let resolvedFile = filePath;
-        const resolvedPath = ctx.resolveSymbolToFile(componentSymbol);
+        const resolvedPath = resolver ? resolver.binding(componentSymbol) : ctx.resolveSymbolToFile(componentSymbol);
         if (resolvedPath) {
           resolvedFile = resolvedPath;
         }
         componentsList.push({ symbol: componentSymbol, file: resolvedFile });
       }
 
-      // 2. Dynamic import matches: component: () => import('./Home.vue')
-      const importMatches = objBody.matchAll(/import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g);
+      // 2. Dynamic import matches: component: () => import('./Home.vue'), also with a magic comment
+      // before the specifier: import(/* webpackChunkName: "home" */ './Home.vue')
+      const importMatches = ownBody.matchAll(/import\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*['"`]([^'"`]+)['"`]\s*\)/g);
       for (const impMatch of importMatches) {
         const importPath = impMatch[1];
-        let resolvedFile = filePath;
-        if (importPath.startsWith('.')) {
+        let resolvedFile = resolver?.module(importPath) ?? filePath;
+        if (resolvedFile === filePath && importPath.startsWith('.')) {
           resolvedFile = join(dirname(filePath), importPath);
         }
         const symbol = importPath.split('/').pop()?.replace(/\.[a-zA-Z0-9]+$/, '') || 'Component';
@@ -101,11 +119,11 @@ export class VueRouterDetector implements FrameworkDetector {
 
       // 3. Legacy require/resolve matches: component: resolve => require(['./Home.vue'], resolve)
       // or require('./Home.vue').default
-      const requireMatches = objBody.matchAll(/require\s*\(\s*(?:\[\s*)?['"`]([^'"`]+)['"`]/g);
+      const requireMatches = ownBody.matchAll(/require\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*(?:\[\s*)?['"`]([^'"`]+)['"`]/g);
       for (const reqMatch of requireMatches) {
         const importPath = reqMatch[1];
-        let resolvedFile = filePath;
-        if (importPath.startsWith('.')) {
+        let resolvedFile = resolver?.module(importPath) ?? filePath;
+        if (resolvedFile === filePath && importPath.startsWith('.')) {
           resolvedFile = join(dirname(filePath), importPath);
         }
         const symbol = importPath.split('/').pop()?.replace(/\.[a-zA-Z0-9]+$/, '') || 'Component';
@@ -113,7 +131,7 @@ export class VueRouterDetector implements FrameworkDetector {
       }
 
       // 4. Named views / components: components: { default: Home, sidebar: () => import('./Sidebar.vue') }
-      const componentsMatch = objBody.match(/\bcomponents\s*:\s*\{([^}]+)\}/);
+      const componentsMatch = ownBody.match(/\bcomponents\s*:\s*\{([^}]+)\}/);
       if (componentsMatch) {
         const compsBody = componentsMatch[1];
         // Match simple symbols in components object: default: Home
@@ -123,7 +141,7 @@ export class VueRouterDetector implements FrameworkDetector {
           const compSym = match[1];
           if (compSym !== 'import' && compSym !== 'require') {
             let resolvedFile = filePath;
-            const resolvedPath = ctx.resolveSymbolToFile(compSym);
+            const resolvedPath = resolver ? resolver.binding(compSym) : ctx.resolveSymbolToFile(compSym);
             if (resolvedPath) {
               resolvedFile = resolvedPath;
             }
@@ -143,7 +161,8 @@ export class VueRouterDetector implements FrameworkDetector {
             method: 'GET',
             path: fullPath,
             handlerFile: comp.file,
-            handlerSymbol: comp.symbol,
+            // A `.vue` component's symbol is named after its file (Vue edge contract rule 1).
+            handlerSymbol: comp.file.endsWith('.vue') ? vueComponentName(comp.file) : comp.symbol,
             metadata: {
               confidence: 'inferred',
               routeType: 'client',
@@ -171,7 +190,7 @@ export class VueRouterDetector implements FrameworkDetector {
         const childrenStart = objBody.indexOf('children') + childrenMatch[0].length - 1;
         const childrenArray = getBracketedContent(objBody, childrenStart);
         if (childrenArray) {
-          const childRoutes = this.parseRoutesArray(childrenArray.content, filePath, ctx, [...prefixParts, pathVal]);
+          const childRoutes = this.parseRoutesArray(childrenArray.content, filePath, ctx, [...prefixParts, pathVal], resolver);
           routes.push(...childRoutes);
         }
       }

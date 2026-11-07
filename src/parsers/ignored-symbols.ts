@@ -52,6 +52,32 @@ export function buildIgnoredSymbols(activeFrameworks: string[]): Set<string> {
 }
 
 /**
+ * Ignore lists with the folders they apply to (workspace-relative, '' = every file). A framework
+ * activated by a sub-folder manifest ignores its symbols only under that folder, so a Vue sub-app
+ * does not drop a PHP backend's `t()` (M3-07). Plain data, so it reaches the parse workers as is.
+ */
+export type ScopedIgnoredSymbols = Array<{ scopes: string[]; symbols: Set<string> }>;
+
+/** `scopes` maps a framework name to its folders; a framework missing from it applies everywhere. */
+export function buildScopedIgnoredSymbols(activeFrameworks: string[], scopes?: Map<string, string[]>): ScopedIgnoredSymbols {
+  const scoped: ScopedIgnoredSymbols = [];
+  for (const name of activeFrameworks) {
+    const symbols = IGNORED_SYMBOLS_BY_FRAMEWORK[name];
+    if (symbols) scoped.push({ scopes: scopes?.get(name) ?? [''], symbols });
+  }
+  return scoped;
+}
+
+/** The merged ignore set for one workspace-relative file, or undefined when nothing applies. */
+export function ignoredSymbolsForFile(scoped: ScopedIgnoredSymbols | undefined, filePath: string): Set<string> | undefined {
+  const sets = (scoped ?? [])
+    .filter(e => e.scopes.some(scope => scope === '' || filePath.startsWith(`${scope}/`)))
+    .map(e => e.symbols);
+  if (sets.length <= 1) return sets[0];
+  return new Set(sets.flatMap(s => [...s]));
+}
+
+/**
  * Get the registry so callers can inspect or extend it at runtime.
  */
 export function getIgnoredSymbolsRegistry(): Record<string, Set<string>> {

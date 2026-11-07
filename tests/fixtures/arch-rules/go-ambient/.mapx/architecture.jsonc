@@ -1,0 +1,13 @@
+// M5-24-R1 fixture: ambient access. Only Infrastructure may read the environment (an ambient selector); os.Args is in no layer (not reported: uncovered.builtins is false).
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "infrastructure/**" }] },
+    { "name": "Environment", "selectors": [{ "ambient": "env" }] }
+  ],
+  "rules": {
+    "Domain": [],
+    "Infrastructure": ["Domain", "Environment"]
+  }
+}

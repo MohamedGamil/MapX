@@ -62,6 +62,12 @@ mapx query <symbol-name> [--dir /path]
 # Show dependencies for a file
 mapx deps <file-path> [--dir /path]
 
+# Edges of one file, filtered, as JSON
+mapx edges <file-path> --direction outgoing --type relation,extends --verified-only --format=json
+
+# Most connected files (in + out degree) with PageRank
+mapx metrics --format=json --top 10
+
 # Project summary
 mapx summary [/path]
 
@@ -75,13 +81,17 @@ mapx serve --sse --port 3456 --dir /path/to/project # SSE (HTTP) transport
 
 ## MCP Tools
 
-When running as an MCP server, MapxGraph exposes these tools:
+When running as an MCP server, MapxGraph exposes 39 tools:
 
-- **`mapx_scan`** — Scan/update the code graph
-- **`mapx_query`** — Search symbols by name pattern
-- **`mapx_dependencies`** — Get deps and reverse-deps for a file
-- **`mapx_export`** — Export compact graph summary (supports llm, json, dot, svg formats)
-- **`mapx_status`** — Check scan status and file counts
+- **Graph building:** `mapx_scan`, `mapx_sync`
+- **Symbol discovery:** `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files`
+- **Dependencies and flow:** `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` (JSON by default: `{ file, direction, incoming[], outgoing[] }` with `file`; `direction`, `type` array, `verifiedOnly`)
+- **Analysis:** `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics` (`format: "json"` gives `{ dir, generatedAt, summary, files[] }`; `top`, default 20, 0 = all; `exclude`), `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`
+- **Architecture rules:** `mapx_arch_allowed` (before adding an import across modules: may `from` depend on `to`? rule, reason, alternatives), `mapx_arch_check` (as `mapx check`, with `exitCode`), `mapx_arch_explain`, `mapx_arch_layers`, `mapx_arch_init` (a proposal; writes only with `write: true`), `mapx_arch_validate_config` (the `.mapx/architecture.jsonc` problems, each with its JSON pointer)
+- **Export:** `mapx_export` (llm, json, dot, svg, toon), `mapx_context`
+- **Workspaces:** `mapx_workspaces` (list, discover)
+- **Languages:** `mapx_lang_list`, `mapx_lang_info` (all grammars are bundled; `mapx_lang_install` and `mapx_lang_uninstall` are no-ops)
+- **Orchestration:** `mapx_batch`, `mapx_agents_generate`
 
 ## When to Use
 
@@ -91,6 +101,7 @@ When running as an MCP server, MapxGraph exposes these tools:
 4. **Files changed**: Run `mapx update` to incrementally update the graph
 5. **Major changes**: Run `mapx scan` for a full re-scan
 6. **Need a visual overview**: Run `mapx export --format=svg -o graph.svg`
+7. **Adding an import across modules**: Before adding an import across modules, call `mapx_arch_allowed` (or run `mapx arch allowed <from> <to>`); after editing, call `mapx_arch_check` with `sync: true` (or run `mapx check --sync`). Each listed `alternatives` symbol is itself allowed; check it fits before using it
 
 ## Storage
 
@@ -99,6 +110,6 @@ When running as an MCP server, MapxGraph exposes these tools:
 
 ## Supported Languages
 
-- **PHP** (built-in): classes, methods, functions, interfaces, traits, enums, constants
-- **JavaScript** (built-in): classes, methods, functions, arrow functions
-- **TypeScript** (built-in): classes, methods, functions, interfaces, enums, type aliases, properties
+- **PHP** (built-in): classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces
+- **JavaScript** (built-in): classes, methods, functions, constants, variables, properties
+- **TypeScript** (built-in): classes, methods, functions, interfaces, enums, type aliases, properties, namespaces

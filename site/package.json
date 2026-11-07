@@ -1,0 +1,18 @@
+{
+  "name": "mapx-site",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Static website for MapX (GitHub Pages). Built from docs/ and site/; never published to npm.",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "dependencies": {
+    "vitepress": "1.6.4"
+  }
+}

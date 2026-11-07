@@ -6,6 +6,11 @@
 ; Modules
 (module name: (constant) @symbol.name) @symbol.kind_module
 
+; Compact nesting: `class Billing::Receipt`, `module Billing::Core`. The symbol is the last
+; constant, scoped by the qualifier (M5-03-R1).
+(class name: (scope_resolution scope: (_) @symbol.scope name: (constant) @symbol.name)) @symbol.kind_class
+(module name: (scope_resolution scope: (_) @symbol.scope name: (constant) @symbol.name)) @symbol.kind_module
+
 ; Instance methods
 (method name: (identifier) @symbol.name) @symbol.kind_method
 

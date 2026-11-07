@@ -1,0 +1,7 @@
+// The base document the AR-11 example extends: shared scope and a layer it then overrides.
+{
+  "scope": { "exclude": ["vendor/**"] },
+  "layers": [
+    { "name": "Http", "selectors": [{ "path": "src/Http/**" }] }
+  ]
+}

@@ -6,29 +6,41 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync, statSync, readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { Scanner, buildMatcher } from './core/scanner.js';
+import { Scanner } from './core/scanner.js';
+import { createParsePool, type ParseWorkerPool } from './core/worker-pool.js';
+import { buildPathFilter } from './core/file-rules.js';
+import { VERSION } from './version.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
-import { AgentGenerator } from './agents/generator.js';
+import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateClusterMetrics, calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop } from './core/metrics.js';
+import { currentSmells } from './core/architecture-analyzer.js';
+import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
+import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { filterChanges, findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
+import { outdatedIndexWarning } from './core/extractor-version.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
-import { getBuiltinLanguages } from './languages/registry.js';
-import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
-import { RouteRegistry } from './frameworks/route-registry.js';
+import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
+import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
+import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
+import { applyCollapsedRepos, codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, repoState, summarizeRepos, workspaceExport } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
+import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
+import { formatValidation, validateArchitectureConfig } from './arch/config.js';
+import { ARCH_TOOLS, runArchTool, type ArchToolName } from './arch/mcp-tools.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -53,6 +65,8 @@ async function loadContext(dir: string) {
   const config = await Config.load(dir);
   const dbPath = resolve(dir, '.mapx', 'mapx.db');
   const store = new Store(dbPath);
+  // stderr: stdout is the stdio transport (M0-10-R3).
+  for (const message of applyCollapsedRepos(config, store)) console.error(message);
   const graph = new MapxGraph(config.repo.name);
 
   const files = store.getAllFiles();
@@ -60,10 +74,8 @@ async function loadContext(dir: string) {
     graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
   }
 
-  const symbols = store.getAllSymbols();
-  for (const sym of symbols) {
-    graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-  }
+  // Symbols loading is skipped to optimize memory and context load times.
+  // MCP tools query SQLite directly when symbol lookups are required.
 
   const edges = store.getAllEdges();
   for (const edge of edges) {
@@ -96,9 +108,22 @@ interface ServeOptions {
   debug?: boolean;
 }
 
+/**
+ * One parse worker pool for the server's lifetime (M4-11): successive mapx_scan / mapx_sync calls
+ * reuse its workers and their loaded grammars. Workers close after MAPX_WORKER_IDLE_MS without work
+ * (default 60 s), and an idle worker never keeps the process alive.
+ */
+let parsePool: ParseWorkerPool | null = null;
+export function mcpParsePool(): ParseWorkerPool {
+  const idle = Number(process.env['MAPX_WORKER_IDLE_MS']);
+  parsePool ??= createParsePool({ idleMs: Number.isFinite(idle) && idle > 0 ? idle : 60_000 });
+  return parsePool;
+}
+
 export function buildServer(options?: ServeOptions): Server {
   const server = new Server(
-    { name: 'mapx', version: '0.1.3' },
+    // The package version, as `mapx --version` reports it (M0-07-R3; was a stale '0.1.3').
+    { name: 'mapx', version: VERSION },
     { capabilities: { tools: {} } }
   );
 
@@ -116,8 +141,10 @@ export function buildServer(options?: ServeOptions): Server {
           properties: {
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
-            repo: { type: 'string', description: 'Scan only a specific registered repository' },
-            all: { type: 'boolean', description: 'Scan all registered repositories' },
+            repo: { type: 'string', description: 'Scan only this registered repository (default: every registered repository)' },
+            all: { type: 'boolean', description: 'Scan all registered repositories (the default when repo is not given)' },
+            force: { type: 'boolean', description: 'Force re-parsing of all files (bypass cache)' },
+            parallel: { type: 'boolean', description: 'Parse on worker threads when the work repays them (default: true; settings.parseWorkers sizes the pool); false parses on the main thread' },
             ...dirProperty,
           },
         },
@@ -130,15 +157,16 @@ export function buildServer(options?: ServeOptions): Server {
           properties: {
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
-            repo: { type: 'string', description: 'Update/sync only a specific registered repository' },
-            all: { type: 'boolean', description: 'Update/sync all registered repositories' },
+            repo: { type: 'string', description: 'Update/sync only this registered repository (default: every registered repository)' },
+            all: { type: 'boolean', description: 'Update/sync all registered repositories (the default when repo is not given)' },
+            parallel: { type: 'boolean', description: 'Parse on worker threads when the work repays them (default: true; settings.parseWorkers sizes the pool); false parses on the main thread' },
             ...dirProperty,
           },
         },
       },
       {
         name: 'mapx_query',
-        description: `Search symbols by name pattern. Returns definitions with file locations and signatures.
+        description: `Search symbols by name pattern. Returns definitions with file locations and signatures; a model class also lists its Eloquent relationships.
 
 SEARCH MODES:
   • Substring (default): term="User" matches UserService, UserController, getUser
@@ -157,11 +185,12 @@ Prefer mapx_search for filtered queries (by kind, file path, exact match). Use m
       },
       {
         name: 'mapx_dependencies',
-        description: 'Get dependencies and reverse dependencies for a file. Shows what a file depends on and what depends on it.',
+        description: 'Get dependencies and reverse dependencies for a file. Shows what a file depends on and what depends on it, plus any service container bindings it declares (abstract → concrete).',
         inputSchema: {
           type: 'object',
           properties: {
-            file: { type: 'string', description: 'File path to analyze (relative to project root)' },
+            file: { type: 'string', description: 'File to analyze: an indexed path (relative to project root), a glob (app/Providers/*.php) or a partial name (AppServiceProvider), as `mapx deps` takes it' },
+            crossRepo: { type: 'boolean', description: 'Only dependencies that cross into or come from another registered repository, like `mapx deps --cross-repo`', default: false },
             ...dirProperty,
           },
           required: ['file'],
@@ -189,6 +218,7 @@ EXAMPLES:
             format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg', 'toon'], description: 'Output format', default: 'llm' },
             tokens: { type: 'number', description: 'Token budget for LLM/TOON format', default: 8192 },
             repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            all: { type: 'boolean', description: 'LLM format: one combined export of every registered repo (repo list, cross-repo dependencies, one section per repo), like `mapx export --all`', default: false },
             exclude: { type: 'string', description: 'Comma-separated exclude glob patterns' },
             include: { type: 'string', description: 'Comma-separated include glob patterns' },
             cluster: { type: 'string', enum: ['none', 'auto'], description: 'Cluster rendering mode for DOT/SVG', default: 'none' },
@@ -204,31 +234,39 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
-            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
-            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
+            exclude: { type: 'array', items: { type: 'string' }, description: 'Globs: changed files they match are not reported, e.g. ["src/**"] (a comma-separated string also works)' },
+            include: { type: 'array', items: { type: 'string' }, description: 'Globs: only the changed files they match are reported (a comma-separated string also works)' },
+            limit: { type: 'number', description: 'Max changed files to list (the count is the total); 0 lists every one', default: 50 },
             ...dirProperty,
           },
         },
       },
       {
         name: 'mapx_metrics',
-        description: 'Get coupling (afferent/efferent) and instability metrics for all files, optionally filtered by language and verified-only.',
+        description: 'Compute structural coupling metrics per file: in-degree, out-degree, total degree, instability and PageRank, ranked by total degree. json: { dir, generatedAt, summary { files, edges, density }, files[] }.',
         inputSchema: {
           type: 'object',
           properties: {
             lang: { type: 'string', description: 'Filter metrics by language' },
             verifiedOnly: { type: 'boolean', description: 'Only compute metrics using verified edges', default: false },
+            format: { type: 'string', enum: ['text', 'llm', 'json'], description: 'text (alias llm): ranked table; json: { dir, generatedAt, summary, files[{ path, language, inDegree, outDegree, totalDegree, instability, pagerank }] }', default: 'text' },
+            top: { type: 'number', description: 'Number of files to return, ranked by total degree (default 20; 0 returns every file)', default: 20 },
+            exclude: { type: 'string', description: 'Comma-separated globs: matching files and their edges are left out' },
             ...dirProperty,
           },
         },
       },
       {
         name: 'mapx_edges',
-        description: 'Granular query of dependency edges in the code graph.',
+        description: 'Structured edge neighbourhood of a file: { file, direction, incoming[], outgoing[] } (JSON by default). Without file, a flat JSON list of edges filtered by from / to / type.',
         inputSchema: {
           type: 'object',
           properties: {
-            type: { type: 'string', description: 'Filter edges by type' },
+            file: { type: 'string', description: 'File whose edges to list (workspace-relative or absolute)' },
+            direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'], description: 'Needs file: edges leaving it, reaching it, or both (default both)' },
+            type: { type: 'array', items: { type: 'string' }, description: 'Edge types to include, e.g. ["relation", "extends"] (a comma-separated string also works)' },
+            verifiedOnly: { type: 'boolean', description: 'Leave out inferred edges', default: false },
+            format: { type: 'string', enum: ['json', 'text'], description: 'Output format', default: 'json' },
             from: { type: 'string', description: 'Filter edges originating from a file pattern (substring match)' },
             to: { type: 'string', description: 'Filter edges targeting a file pattern (substring match)' },
             ...dirProperty,
@@ -241,12 +279,83 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
-            source: { type: 'string', enum: ['all', 'namespace', 'directory', 'community'], description: 'Filter clusters by source type' },
+            source: { type: 'string', enum: ['all', 'namespace', 'directory', 'community', 'layer'], description: 'Filter clusters by source type' },
             cluster: { type: 'string', description: 'Specific cluster name to inspect' },
             ...dirProperty,
           },
         },
       },
+      {
+        name: 'mapx_profile',
+        description: 'Get the codebase profile including detected archetype, frameworks, patterns, and active taxonomy.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_explain',
+        description: 'Explain the role classification for a file, showing all signal sources, confidence scores, and reasons.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'File path to explain (relative to project root)' },
+            ...dirProperty,
+          },
+          required: ['file'],
+        },
+      },
+      {
+        name: 'mapx_smells',
+        description: 'Run architectural smell detection on the codebase, returning a list of cycles, hubs, unstable dependencies, or layer violations.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_dsm',
+        description: 'Get the Dependency Structure Matrix (DSM) showing coupling and edge counts between codebase clusters/modules.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_layers',
+        description: 'Get all files grouped by their architectural role/layer, including file counts and basic stats.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_arch_validate_config',
+        description: `Validate the architecture rules configuration (.mapx/architecture.jsonc, or a view .mapx/architecture/<view>.jsonc) with its extends chain, as \`mapx arch validate-config\` does. Needs no index.
+Returns JSON { valid, view, files, issues: [{ file, pointer, message }] }: every problem at once, each with its document and JSON pointer, in document order. An invalid or missing configuration is a tool error.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            view: { type: 'string', description: 'A view name: validates .mapx/architecture/<view>.jsonc' },
+            format: { type: 'string', enum: ['json', 'text'], description: 'json (default) or text: one "file#pointer: message" line per problem, as the CLI prints' },
+            ...dirProperty,
+          },
+        },
+      },
+      // mapx_arch_check, _layers, _allowed, _explain, _init (M5-14, AR-19): src/arch/mcp-tools.ts.
+      ...ARCH_TOOLS,
       {
         name: 'mapx_trace',
         description: 'Trace data flow paths from a starting symbol or file. Returns upstream callers (up), downstream callees (down), or both. Use this to understand how data moves through the codebase.',
@@ -272,6 +381,7 @@ EXAMPLES:
             framework: { type: 'string', description: 'Filter by framework name' },
             method: { type: 'string', description: 'Filter by HTTP method (GET, POST, etc.)' },
             pathPattern: { type: 'string', description: 'Filter by route path pattern' },
+            clients: { type: 'string', enum: ['all', 'unmatched'], description: 'Instead of routes, list frontend HTTP call sites (axios/fetch/clients) with the backend route each reaches; "unmatched" lists only calls that reach no live route' },
             ...dirProperty,
           },
         },
@@ -314,6 +424,10 @@ EXAMPLES:
             all: {
               type: 'boolean',
               description: 'Generate files for all available providers.'
+            },
+            force: {
+              type: 'boolean',
+              description: 'Overwrite files that have no mapx block or whose mapx block was edited. Without it those files are skipped.'
             }
           }
         }
@@ -324,6 +438,7 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
+            include_leaf_libraries: { type: 'boolean', description: 'Include high-import leaf libraries that are normally filtered out as stable foundations', default: false },
             ...dirProperty,
           },
         },
@@ -472,6 +587,7 @@ EXAMPLES:
           properties: {
             symbol: { type: 'string', description: 'Symbol name (e.g. "UserService") or scoped name (e.g. "UserService::findAll")' },
             source: { type: 'boolean', description: 'Include the symbol\'s source code in the response', default: false },
+            include_members: { type: 'boolean', description: 'Include member symbols (methods, properties) when inspecting a class/interface/trait', default: false },
             format: { type: 'string', enum: ['text', 'json'], description: 'Output format', default: 'text' },
             ...dirProperty,
           },
@@ -485,12 +601,14 @@ EXAMPLES:
 EXAMPLES:
   • List all files: { }
   • Files in a directory: { "path": "src/core/" }
+  • Glob pattern: { "path": "src/core/*.ts" }
+  • Multi-level glob: { "path": "**/*.json" }
   • Only TypeScript files: { "lang": "typescript" }
   • Largest files first: { "sort": "lines", "limit": 20 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Filter by path prefix (e.g. "src/core/" or "apps/dashboard/")' },
+            path: { type: 'string', description: 'Filter by path prefix or glob pattern (e.g. "src/core/", "src/core/*.ts", "**/*.json")' },
             lang: { type: 'string', description: 'Filter by language (e.g. "typescript", "python", "go")' },
             sort: { type: 'string', enum: ['lines', 'path'], description: 'Sort by line count (desc) or path (asc)', default: 'path' },
             limit: { type: 'number', description: 'Max files to return', default: 50 },
@@ -500,15 +618,26 @@ EXAMPLES:
       },
       {
         name: 'mapx_lang_list',
-        description: 'List all supported languages, their extensions, tier, and installation status.',
+        description: 'List all supported languages with their extensions/file names and tier. All grammars are bundled (same output as `mapx lang list`).',
         inputSchema: {
           type: 'object',
           properties: {},
         },
       },
       {
+        name: 'mapx_lang_info',
+        description: 'Show a language\'s tier, extensions, file names and resolved grammar/query files (same output as `mapx lang info`).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            lang: { type: 'string', description: 'Name of the language (e.g. python, ruby, bash)' }
+          },
+          required: ['lang'],
+        },
+      },
+      {
         name: 'mapx_lang_install',
-        description: 'Install grammar and query files for a dynamically installable language.',
+        description: 'No-op kept for compatibility: all language grammars are bundled with MapX (reports that nothing needs installing).',
         inputSchema: {
           type: 'object',
           properties: {
@@ -519,7 +648,7 @@ EXAMPLES:
       },
       {
         name: 'mapx_lang_uninstall',
-        description: 'Uninstall grammar and query files for a dynamically installable language.',
+        description: 'No-op kept for compatibility: bundled grammars cannot be removed; use exclude patterns to skip files.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -539,6 +668,11 @@ EXAMPLES:
               enum: ['list', 'discover'],
               description: 'Action to perform. "list" returns registered repos with stats + discovered repos. "discover" returns only unregistered discoveries.',
               default: 'list',
+            },
+            includePeers: {
+              type: 'boolean',
+              description: 'Also discover sibling git repositories of the workspace root (opt-in; default false).',
+              default: false,
             },
             ...dirProperty,
           },
@@ -600,9 +734,10 @@ EXAMPLE:
     const resolveOrFail = (a: Record<string, unknown>): { dir: string } | { error: string } => {
       const dir = resolveDir(a);
       if (!dir) return { error: 'No project directory set. Either pass a "dir" argument or start the server with --dir /path/to/project.' };
-      // Lazily enable cross-process tool call logging if not already set
+      // Lazily enable cross-process tool call logging if not already set, in an existing .mapx/
+      // only: a call never creates a workspace or its .mapx/ folder (review of M5-14).
       const eventBus = UiEventBus.getInstance();
-      if (!(eventBus as any).mapxDir) eventBus.setMapxDir(dir);
+      if (!(eventBus as any).mapxDir && existsSync(join(dir, '.mapx'))) eventBus.setMapxDir(dir);
       return { dir };
     };
     const loadCtx = async (dir: string) => {
@@ -634,13 +769,16 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const force = !!(args as any)?.force;
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
-          const result = await scanner.scanFull(repoNames);
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel, pool: mcpParsePool() });
+          const result = await scanner.scanFull(repoNames, { force });
           return {
             content: [{
               type: 'text',
-              text: `Scanned ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
+              text: `Scanned ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -668,13 +806,15 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel, pool: mcpParsePool() });
           const result = await scanner.scanIncremental(repoNames);
           return {
             content: [{
               type: 'text',
-              text: `Updated ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
+              text: `Updated ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -708,7 +848,13 @@ EXAMPLE:
         const header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n\n`;
         const lines = results.map(sym => {
           const scope = sym.scope ? `${sym.scope}::` : '';
-          return `${sym.kind} ${scope}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
+          let text = `${sym.kind} ${scope}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
+          // An Eloquent model lists its relationships, as `mapx query` does (F07, M0-05-R4).
+          if (sym.kind === 'class') {
+            const relations = modelRelations(ctx.store, { file: sym.file_path as string }).filter(r => r.model === sym.name);
+            if (relations.length) text += `\n  relationships:${relations.map(r => `\n    ${describeRelation(r)}`).join('')}`;
+          }
+          return text;
         });
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
@@ -725,22 +871,45 @@ EXAMPLE:
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const deps = ctx.graph.getDependencies(file);
-        const rdeps = ctx.graph.getReverseDependencies(file);
+        // Exact path, glob or partial name, as `mapx deps` resolves it; one section per match (M0-03-R4).
+        // Backslash, `./` and absolute forms as mapx_edges takes them (M0-11-R3).
+        const paths = resolveFilePaths(indexedPath(dir, file), ctx.store.getAllFiles() as Array<{ path: unknown }>);
+        if (!paths) {
+          const { error, tip } = fileNotFoundMessage(file);
+          return { content: [{ type: 'text', text: `${error}\n\n${tip}` }], isError: true };
+        }
 
-        const parts: string[] = [];
-        if (deps.length > 0) {
-          parts.push('Dependencies:');
-          for (const d of deps) parts.push(`  → ${d.target} (${d.type})`);
-        }
-        if (rdeps.length > 0) {
-          parts.push('Depended on by:');
-          for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
-        }
-        if (parts.length === 0) parts.push('No dependencies found');
+        const sections = paths.map(filePath => {
+          const parts: string[] = paths.length > 1 ? [`── ${filePath} ──`] : [];
+          if ((args as any)?.crossRepo) {
+            // As `deps --cross-repo` (F18, M0-10-R2).
+            parts.push(...crossRepoDependencies(ctx.store, filePath));
+            return parts.join('\n');
+          }
+
+          const deps = ctx.graph.getDependencies(filePath);
+          const rdeps = ctx.graph.getReverseDependencies(filePath);
+          const start = parts.length;
+          if (deps.length > 0) {
+            parts.push('Dependencies:');
+            for (const d of deps) parts.push(`  → ${d.target} (${d.type})`);
+          }
+          if (rdeps.length > 0) {
+            parts.push('Depended on by:');
+            for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
+          }
+          if (parts.length === start) parts.push('No dependencies found');
+          // Service container bindings declared here, as `mapx deps` shows them (F08, M0-05-R4).
+          const bindings = fileBindings(ctx.store, filePath);
+          if (bindings.length > 0) {
+            parts.push('Bindings (abstract → concrete):');
+            for (const b of bindings) parts.push(`  ${describeBinding(b)}`);
+          }
+          return parts.join('\n');
+        });
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
-        return { content: [{ type: 'text', text: warning + parts.join('\n') }] };
+        return { content: [{ type: 'text', text: warning + sections.join('\n\n') }] };
       }
 
       case 'mapx_export': {
@@ -767,7 +936,7 @@ EXAMPLE:
           ...(ctx.config.settings.includePatterns ?? []),
           ...include,
         ];
-        const matcher = buildMatcher(excludes, includes);
+        const matcher = buildPathFilter(excludes, includes);
         const allFiles = ctx.store.getAllFiles(repo).map(f => f.path as string);
         const filteredFiles = allFiles.filter(f => matcher(f));
 
@@ -792,7 +961,10 @@ EXAMPLE:
         }
 
         const exporter = new LLMExporter(ctx.store, ctx.graph);
-        const output = exporter.export({ format: 'llm', tokenBudget: tokens, repo, files: filteredFiles });
+        // Combined multi-repo export, as `export --all` (F18, M0-10-R2).
+        const output = (args as any)?.all && !repo
+          ? workspaceExport(dir, ctx.config.repos, ctx.config.repo.name, ctx.store, exporter, tokens, filteredFiles)
+          : exporter.export({ format: 'llm', tokenBudget: tokens, repo, files: filteredFiles });
         return { content: [{ type: 'text', text: output }] };
       }
 
@@ -816,22 +988,50 @@ EXAMPLE:
         const topSymbols = ctx.store.getTopSymbolsByPageRank(ctx.graph, 5);
 
         const repoRoot = resolve(dir, ctx.config.repo.path);
+        // As `mapx status`: one walk, then the git changes plus the stale files git does not list,
+        // such as a new file in a non-git workspace or in a nested repo (M5-05-R1).
+        const stale = findStaleFiles(ctx.store, dir);
+        // exclude/include narrow the changed files reported, as `mapx status --exclude/--include`
+        // do (M4-28-R2): an array of globs or a comma-separated string, commas inside an element
+        // splitting it as the CLI splits `--exclude 'a/**,b/**'`; empty patterns are dropped.
+        const patterns = (v: unknown): string[] =>
+          (Array.isArray(v) ? v.map(String) : [String(v ?? '')]).flatMap(s => s.split(',')).map(s => s.trim()).filter(Boolean);
+        const excludes = patterns((args as any)?.exclude);
+        const includes = patterns((args as any)?.include);
         let isStale = false;
         let gitInfo = '';
+        let listed: Array<{ path: string; status: string }> = [];
         if (isGitRepo(repoRoot)) {
-          const changes = getChangedFiles(repoRoot, lastCommit || undefined);
-          if (changes.length === 0) {
+          // Only changes a scan would index or that touch an indexed file (M0-11-R3).
+          const changes = indexableChanges(ctx.store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), ctx.config.repo.name, stale);
+          listed = [
+            ...filterChanges(changes, dir, repoRoot, excludes, includes),
+            ...filterChanges(unlistedStale(stale, dir, repoRoot, changes), dir, dir, excludes, includes),
+          ];
+          if (listed.length === 0) {
             gitInfo = 'No changes since last scan  (✓ index is current)';
           } else {
             isStale = true;
-            gitInfo = `${changes.length} changed files  (⚠ stale)`;
+            gitInfo = `${listed.length} changed files  (⚠ stale)`;
           }
         } else {
-          gitInfo = 'Not a git repository  (✓ index is current)';
+          listed = filterChanges(unlistedStale(stale, dir, repoRoot), dir, dir, excludes, includes);
+          const count = listed.length;
+          isStale = count > 0;
+          gitInfo = count ? `Not a git repository; ${count} changed files since last scan  (⚠ stale)` : 'Not a git repository  (✓ index is current)';
         }
+        // The changed files, one per line, as `mapx status` lists them: at most `limit` (default 50,
+        // 0 lists every one); the count above is the total.
+        const rawLimit = Number((args as any)?.limit ?? 50);
+        const limit = Number.isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 50;
+        const shown = limit === 0 ? listed : listed.slice(0, limit);
+        const icon: Record<string, string> = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
+        for (const c of shown) gitInfo += `\n    ${icon[c.status] ?? '~'} ${c.path}`;
+        if (shown.length < listed.length) gitInfo += `\n    … ${listed.length - shown.length} more (showing ${shown.length} of ${listed.length}; pass limit: 0 to list all)`;
 
-        const recommendations = isStale
-          ? '⚠ Index is stale. Run `mapx sync` or `mapx update` to bring it up to date.'
+        const outdated = outdatedIndexWarning(ctx.store, 'run mapx_sync');
+        const recommendations = isStale || outdated
+          ? `⚠ Index is stale. Run \`mapx sync\` or \`mapx update\` to bring it up to date.${outdated ? `\n  ${outdated}` : ''}`
           : '✓ Index is up to date.';
 
         const textOutput = `Directory: ${dir}
@@ -875,8 +1075,11 @@ Recommendation:
         const kind = (args as any)?.kind as string | undefined;
         const filePrefix = (args as any)?.file as string | undefined;
         const exact = !!(args as any)?.exact;
-        const limit = (args as any)?.limit as number | undefined;
         const format = ((args as any)?.format || 'text') as string;
+        const isWildcard = term === '*' || term === '';
+        // Listing a whole file (wildcard + file filter) returns every symbol unless a limit is given.
+        const limit = ((args as any)?.limit as number | undefined) ??
+          (isWildcard && filePrefix ? Math.max(1, ctx.store.countSymbolsFiltered({ term, kind, filePrefix, exact })) : undefined);
 
         let results = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
         let broadened = false;
@@ -907,11 +1110,22 @@ Recommendation:
         }
 
         // PageRank enrichment
-        const rankedAll = ctx.graph.getRankedSymbols();
         const rankMap = new Map<string, number>();
-        for (const item of rankedAll) {
-          rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+        if (results.length > 0) {
+          const filePaths = Array.from(new Set(results.map(r => r.file_path)));
+          const placeholders = filePaths.map(() => '?').join(',');
+          const fileRanks = ctx.store.raw.prepare(`
+            SELECT path, pagerank FROM files WHERE path IN (${placeholders})
+          `).all(...filePaths) as any[];
+          const fileRankMap = new Map<string, number>(fileRanks.map(f => [f.path, f.pagerank]));
+          for (const sym of results) {
+            const parentFileRank = fileRankMap.get(sym.file_path) || 0;
+            const symbolRank = parentFileRank * (1 + (sym.scope ? 2 : 1) * 0.1);
+            rankMap.set(`${sym.file_path}::${sym.name}`, symbolRank);
+          }
         }
+
+        const totalMatches = ctx.store.countSymbolsFiltered({ term, kind: broadened ? undefined : kind, filePrefix, exact });
 
         // F43: JSON format support
         if (format === 'json') {
@@ -925,12 +1139,18 @@ Recommendation:
             signature: sym.signature || '',
             pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
           }));
+          const offset = 0;
           const warning = getMcpStalenessWarning(ctx.store, dir);
-          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
+          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, totalMatches, offset, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
         }
 
         // F43: Summary header
-        let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        let header = '';
+        if (results.length < totalMatches) {
+          header = `Found ${results.length} of ${totalMatches} symbols`;
+        } else {
+          header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        }
         if (kind && !broadened) header += ` of kind "${kind}"`;
         if (filePrefix) header += ` in ${filePrefix}`;
         if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
@@ -1091,7 +1311,7 @@ Recommendation:
         const maxDepth = (args as any)?.depth ?? 1;
         const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
         const visited = new Set<string>([symbolName]);
-        const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+        const results: Array<{ caller: string; callee: string; file: string; line: number | null; depth: number }> = [];
 
         while (queue.length > 0) {
           const { symName, depth } = queue.shift()!;
@@ -1101,13 +1321,13 @@ Recommendation:
           for (const edge of callees) {
             const calleeName = edge.target_symbol || '<unknown>';
             const callerName = edge.source_symbol || symName;
-            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
 
             results.push({
               caller: callerName,
               callee: calleeName,
               file: edge.target_file,
-              line: meta.startLine || 1,
+              // The callee's own declaration, or none: never the call site in the caller (M0-11-R2).
+              line: ctx.store.getSymbolLineInFile(edge.target_file, calleeName, calleeScopeHints(callees, edge)),
               depth: depth + 1
             });
 
@@ -1135,7 +1355,7 @@ Recommendation:
 
         const lines = results.map(res => {
           const indent = '  '.repeat(res.depth);
-          return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}:${res.line}`;
+          return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}${res.line ? `:${res.line}` : ''}`;
         });
 
         const header = `${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbolName}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:\n`;
@@ -1285,6 +1505,17 @@ Callees: ${callees.length}`;
           outputText += `\n\n── Related ──\n${relatedParts.join('\n\n')}`;
         }
 
+        // F44: Include siblings/members when requested
+        const includeMembersArg = (args as any)?.include_members;
+        if (includeMembersArg) {
+          const allFileSymbols = ctx.store.getSymbolsForFile(sym.file_path as string);
+          const memberSymbols = allFileSymbols.filter((s: any) => s.scope === sym.name);
+          if (memberSymbols.length > 0) {
+            const memberLines = memberSymbols.map((s: any) => `  ${s.kind} ${s.name} (L${s.start_line}-${s.end_line})`);
+            outputText += `\n\n── Members ──\n${memberLines.join('\n')}`;
+          }
+        }
+
         const warning = getMcpStalenessWarning(ctx.store, dir);
         return { content: [{ type: 'text', text: warning + outputText }] };
       }
@@ -1311,7 +1542,10 @@ Callees: ${callees.length}`;
 
         // F43: Summary header
         let header = `${results.length} file${results.length !== 1 ? 's' : ''}`;
-        if (pathPrefix) header += ` under ${pathPrefix}`;
+        if (pathPrefix) {
+          const isGlob = pathPrefix.includes('*') || pathPrefix.includes('?');
+          header += isGlob ? ` matching ${pathPrefix}` : ` under ${pathPrefix}`;
+        }
         if (lang) header += ` (${lang})`;
         header += `:\n\n`;
 
@@ -1321,62 +1555,74 @@ Callees: ${callees.length}`;
       }
 
       case 'mapx_metrics': {
+        // Same validation and report as `mapx metrics` (D012, M0-03-R3).
+        const format = parseFormat((args as any)?.format, 'text');
+        const top = parseTop((args as any)?.top);
+        for (const v of [format, top]) {
+          if (typeof v === 'object') return { content: [{ type: 'text', text: v.error }], isError: true };
+        }
         const resolved = resolveOrFail(args || {});
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const lang = (args as any)?.lang;
-        const verifiedOnly = !!(args as any)?.verifiedOnly;
-
-        const metrics = calculateMetrics(ctx.store, {
+        const { report, total } = buildMetricsReport(ctx.store, new Map(ctx.graph.getRankedFiles().map(f => [f.path, f.pagerank])), {
+          dir,
           repo: ctx.config.repo.name,
-          language: lang,
-          verifiedOnly,
+          language: (args as any)?.lang,
+          verifiedOnly: !!(args as any)?.verifiedOnly,
+          exclude: String((args as any)?.exclude ?? '').split(',').map(s => s.trim()).filter(Boolean),
+          top: top as number,
         });
-
-        if (metrics.length === 0) {
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
+        }
+        if (report.files.length === 0) {
           return { content: [{ type: 'text', text: 'No metrics found.' }] };
         }
-
-        const lines = [
-          '── Coupling & Instability Metrics ─────────────────────',
-          `${'File Path'.padEnd(45)} | ${'Lang'.padEnd(10)} | ${'Ca'.padStart(4)} | ${'Ce'.padStart(4)} | ${'Instability'.padStart(11)}`,
-          '-'.repeat(85),
-        ];
-
-        for (const m of metrics) {
-          const pathTrunc = m.path.length > 45 ? '...' + m.path.substring(m.path.length - 42) : m.path;
-          lines.push(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
-        }
-
         const warning = getMcpStalenessWarning(ctx.store, dir);
-        return {
-          content: [{
-            type: 'text',
-            text: warning + lines.join('\n'),
-          }],
-        };
+        const lastScan = ctx.store.getMeta('last_scan_time:' + ctx.config.repo.name);
+        return { content: [{ type: 'text', text: warning + formatMetricsText(report, total, lastScan) }] };
       }
 
       case 'mapx_edges': {
+        // Same validation as `mapx edges` (M0-03-R3).
+        const format = parseFormat((args as any)?.format, 'json');
+        const fileArg = (args as any)?.file as string | undefined;
+        const optionError = typeof format === 'object' ? format.error : directionError((args as any)?.direction, !!fileArg);
+        if (optionError) return { content: [{ type: 'text', text: optionError }], isError: true };
         const resolved = resolveOrFail(args || {});
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const type = (args as any)?.type;
-        const from = (args as any)?.from;
-        const to = (args as any)?.to;
-
+        const file = fileArg ? indexedPath(dir, fileArg) : undefined;
+        const direction = ((args as any)?.direction ?? 'both') as EdgeDirection;
         const edges = ctx.store.queryEdges({
-          repo: ctx.config.repo.name,
-          type,
-          from,
-          to,
+          // Every registered repo's edges for a file, as `mapx edges <file>` (M0-03-R4).
+          repo: file ? undefined : ctx.config.repo.name,
+          type: (args as any)?.type,
+          from: (args as any)?.from,
+          to: (args as any)?.to,
+          file,
+          direction,
+          verifiedOnly: !!(args as any)?.verifiedOnly,
         });
+
+        // With a file: F04's incoming / outgoing neighbourhood, JSON by default (D012).
+        if (file) {
+          if (edges.length === 0 && !ctx.store.getFile(file)) return { content: [{ type: 'text', text: notIndexedMessage(file) }], isError: true };
+          const neighbourhood = fileEdges(file, direction, edges);
+          if (format === 'json') return { content: [{ type: 'text', text: JSON.stringify(neighbourhood, null, 2) }] };
+          return { content: [{ type: 'text', text: getMcpStalenessWarning(ctx.store, dir) + formatFileEdgesText(neighbourhood) }] };
+        }
+
+        // Without a file: the flat list, JSON by default (M0-03-R2); `format: "text"` keeps the line listing.
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(edges.map(edgeView), null, 2) }] };
+        }
 
         if (edges.length === 0) {
           return { content: [{ type: 'text', text: 'No matching edges found.' }] };
@@ -1727,8 +1973,9 @@ Callees: ${callees.length}`;
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const tracer = new FlowTracer(ctx.store);
-        const sinks = tracer.findSinks(ctx.config.repo.name);
-        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found:`];
+        const includeLeafLibraries = !!(args as any)?.include_leaf_libraries;
+        const sinks = tracer.findSinks(ctx.config.repo.name, includeLeafLibraries);
+        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found${!includeLeafLibraries ? ' (excluding high-import leaf libraries)' : ''}:`];
         for (const s of sinks) {
           const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [
             'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
@@ -1758,7 +2005,7 @@ Callees: ${callees.length}`;
         let targetProviders: string[] = [];
 
         const requestArgs = args as any || {};
-        if (requestArgs.all) {
+        if (requestArgs.all || (Array.isArray(requestArgs.providers) && requestArgs.providers.includes('all'))) {
           targetProviders = available;
         } else if (requestArgs.providers && Array.isArray(requestArgs.providers)) {
           targetProviders = requestArgs.providers.filter((p: string) => available.includes(p));
@@ -1777,9 +2024,27 @@ Callees: ${callees.length}`;
         for (const action of actions) {
           if (action.status === 'up_to_date') {
             results.push(`${action.filename}: Up to date.`);
+          } else if (action.status === 'key_conflict') {
+            results.push(`${action.filename}: Skipped, ${action.note}`);
+          } else if (needsConsent(action) && !requestArgs.force) {
+            results.push(`${action.filename}: Skipped, it has content mapx did not write (${action.status}); pass force: true to ${action.status === 'remove' ? 'remove' : 'overwrite'} it.`);
+          } else if (action.status === 'remove') {
+            generator.execute(action);
+            results.push(`${action.filename}: ${action.note}`);
           } else {
             generator.execute(action);
             results.push(`${action.filename}: Successfully generated/updated (${action.status}).`);
+          }
+        }
+        for (const action of generator.generateMcpConfigs(generator.companionMcpConfigs(targetProviders), { dir })) {
+          if (action.status === 'up_to_date') continue;
+          if (action.status === 'unparseable') {
+            results.push(`${action.filename}: Skipped, not valid JSON.`);
+          } else {
+            generator.executeMcpConfig(action);
+            results.push(`${action.filename}: mapx MCP server ${action.status === 'merge' ? 'merged in' : 'written'}.`);
+            const lost = droppedCommentsWarning(action);
+            if (lost) results.push(lost);
           }
         }
 
@@ -1791,6 +2056,16 @@ Callees: ${callees.length}`;
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
 
+        const clients = (args as any)?.clients as string | undefined;
+        if (clients === 'all' || clients === 'unmatched') {
+          const calls = await loadClientCalls(dir, {
+            unmatched: clients === 'unmatched',
+            method: (args as any)?.method,
+            path: (args as any)?.pathPattern,
+          });
+          return { content: [{ type: 'text', text: calls.length ? JSON.stringify(calls, null, 2) : (clients === 'unmatched' ? 'No unmatched HTTP calls.' : 'No frontend HTTP calls found. Run `mapx scan` on a workspace with JS/TS/Vue sources.') }] };
+        }
+
         const routeRegistry = new RouteRegistry();
         await routeRegistry.load(dir);
 
@@ -1800,10 +2075,24 @@ Callees: ${callees.length}`;
           path: (args as any)?.pathPattern,
         });
 
+        if (routes.length === 0) {
+          const allRoutes = routeRegistry.getRoutes();
+          let msg = 'No routes found.';
+          if (allRoutes.length === 0) {
+            msg += '\n\nNo framework routes have been detected. Possible causes:\n  • No route-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express, Fastify, Koa, Laravel, Next.js, Django, Flask, Rails, Spring, FastAPI';
+          } else {
+            msg += `\n\n${allRoutes.length} route(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.method) msg += `\n  method: "${(args as any).method}"`;
+            if ((args as any)?.pathPattern) msg += `\n  path: "${(args as any).pathPattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
+
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify(routes, null, 2),
+            text: JSON.stringify(routes.map(toRouteView), null, 2),
           }],
         };
       }
@@ -1822,6 +2111,20 @@ Callees: ${callees.length}`;
           hookName: (args as any)?.namePattern,
         });
 
+        if (hooks.length === 0) {
+          const allHooks = routeRegistry.getHooks();
+          let msg = 'No hooks found.';
+          if (allHooks.length === 0) {
+            msg += '\n\nNo framework hooks have been detected. Possible causes:\n  • No hook-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express middleware, Laravel events, React hooks, Vue composables';
+          } else {
+            msg += `\n\n${allHooks.length} hook(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.type) msg += `\n  type: "${(args as any).type}"`;
+            if ((args as any)?.namePattern) msg += `\n  name: "${(args as any).namePattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
+
         return {
           content: [{
             type: 'text',
@@ -1830,40 +2133,24 @@ Callees: ${callees.length}`;
         };
       }
 
-      case 'mapx_lang_list': {
-        const langs = getBuiltinLanguages();
-        const listStr = Object.entries(langs)
-          .map(([name, def]) => {
-            const installed = isLanguageInstalled(name) ? 'Installed' : 'Not Installed';
-            return `- ${name} (${def.extensions.join(', ')} | tier: ${def.tier} | status: ${installed})`;
-          })
-          .join('\n');
-        return { content: [{ type: 'text', text: `Supported languages:\n${listStr}` }] };
-      }
+      case 'mapx_lang_list':
+        return { content: [{ type: 'text', text: formatLanguageList() }] };
 
-      case 'mapx_lang_install': {
-        const { lang } = args as { lang: string };
-        if (!lang) {
-          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
-        }
-        try {
-          await installLanguage(lang);
-          return { content: [{ type: 'text', text: `Successfully installed language '${lang}'.` }] };
-        } catch (err: any) {
-          return { content: [{ type: 'text', text: `Error installing language '${lang}': ${err.message}` }] };
-        }
-      }
-
+      // Unknown or missing languages are tool errors (isError), like the CLI's non-zero exit.
+      case 'mapx_lang_info':
+      case 'mapx_lang_install':
       case 'mapx_lang_uninstall': {
-        const { lang } = args as { lang: string };
+        const { lang } = (args ?? {}) as { lang?: string };
         if (!lang) {
-          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
+          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }], isError: true };
         }
+        const action = name === 'mapx_lang_info' ? 'describing' : name === 'mapx_lang_install' ? 'installing' : 'uninstalling';
         try {
-          await uninstallLanguage(lang);
-          return { content: [{ type: 'text', text: `Successfully uninstalled language '${lang}'.` }] };
+          const text = name === 'mapx_lang_info' ? formatLanguageInfo(lang)
+            : name === 'mapx_lang_install' ? await installLanguage(lang) : await uninstallLanguage(lang);
+          return { content: [{ type: 'text', text }] };
         } catch (err: any) {
-          return { content: [{ type: 'text', text: `Error uninstalling language '${lang}': ${err.message}` }] };
+          return { content: [{ type: 'text', text: `Error ${action} language '${lang}': ${err.message}` }], isError: true };
         }
       }
 
@@ -1877,20 +2164,17 @@ Callees: ${callees.length}`;
         const action = (args as any)?.action || 'list';
         const registeredPaths = new Set<string>();
         for (const r of ctx.config.repos) {
-          registeredPaths.add(resolve(dir, r.path));
+          registeredPaths.add(WorkspaceManager.repoKey(dir, r.path));
         }
 
         // Discover unregistered repos
         const submodules = WorkspaceManager.discoverSubmodules(dir);
-        const peers = WorkspaceManager.discoverPeerRepos(dir);
-        const { readdirSync } = await import('node:fs');
-        const wsFiles = readdirSync(dir).filter((f: string) => f.endsWith('.code-workspace'));
-        const { join: pathJoin } = await import('node:path');
+        const peers = (args as any)?.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
         const vscodeFolders: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
-        for (const f of wsFiles) {
-          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(pathJoin(dir, f), dir);
+        for (const f of codeWorkspaceFiles(dir)) {
+          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
           for (const p of wsFolderRepos) {
-            if (!registeredPaths.has(resolve(dir, p.path))) {
+            if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
               vscodeFolders.push({ name: p.name, path: p.path, source: 'vscode-workspace', isInitialized: p.isInitialized });
             }
           }
@@ -1898,16 +2182,32 @@ Callees: ${callees.length}`;
 
         const discovered: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
         for (const s of submodules) {
-          if (!registeredPaths.has(resolve(dir, s.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, s.path))) {
             discovered.push({ name: s.name, path: s.path, source: 'submodule', isInitialized: s.isInitialized });
           }
         }
         for (const p of peers) {
-          if (!registeredPaths.has(resolve(dir, p.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
             discovered.push({ name: p.name, path: p.path, source: 'peer', isInitialized: p.isInitialized });
           }
         }
         discovered.push(...vscodeFolders);
+
+        // Deep-scan nested git repos (up to 3 levels)
+        const nestedGitRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+        for (const n of nestedGitRepos) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, n.path))) {
+            discovered.push({ name: n.name, path: n.path, source: 'nested-git', isInitialized: true });
+          }
+        }
+
+        // Monorepo packages (same git repo, separate apps/packages dirs)
+        const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+        for (const p of monoPkgs) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
+            discovered.push({ name: p.name, path: p.path, source: 'monorepo', isInitialized: true });
+          }
+        }
 
         if (action === 'discover') {
           return {
@@ -1918,32 +2218,40 @@ Callees: ${callees.length}`;
           };
         }
 
-        // "list" action — registered repos with stats
-        const repos: Array<Record<string, unknown>> = [];
-        for (const r of ctx.config.repos) {
-          const fileCount = ctx.store.getFileCount(r.name);
-          const symbolCount = ctx.store.getSymbolCount(r.name);
-          const edgeCount = ctx.store.getEdgeCount(r.name);
-          const crossRepoEdges = ctx.store.raw.prepare(
-            `SELECT COUNT(*) as cnt FROM edges WHERE repo = ? AND target_repo IS NOT NULL AND target_repo != ?`
-          ).get(r.name, r.name) as any;
-          const lastScanned = ctx.store.getMeta('last_scan_time:' + r.name) || ctx.store.getMeta('last_scan_time') || null;
+        // "list" action — registered repos with stats (F18 shape; M0-10-R1)
+        const summaries = summarizeRepos(dir, ctx.config.repos, ctx.config.repo.name, ctx.store);
+        const pairs = crossRepoPairs(ctx.store);
+        const repos: Array<Record<string, unknown>> = summaries.map(r => ({
+          name: r.name,
+          ...repoState(dir, r.path, r.type, true),
+          type: r.type,
+          fileCount: r.files,
+          symbolCount: r.symbols,
+          edgeCount: r.edges,
+          crossRepoEdgeCount: r.crossRepoEdgeCount,
+          lastScanned: r.lastScanned,
+          // F18's name for the repo's own HEAD; null for a folder without a checkout (M0-10-R2).
+          headSha: r.head,
+        }));
+        // Uninitialised submodules that are not registered, as the CLI table lists them (F18, M0-10-R3).
+        for (const sub of submodules) {
+          if (sub.isInitialized || registeredPaths.has(WorkspaceManager.repoKey(dir, sub.path))) continue;
           repos.push({
-            name: r.name,
-            path: r.path,
-            type: ctx.config.repo.name === r.name ? 'primary' : 'peer',
-            fileCount,
-            symbolCount,
-            edgeCount,
-            crossRepoEdgeCount: crossRepoEdges?.cnt || 0,
-            lastScanned,
+            name: sub.name, ...repoState(dir, sub.path, 'submodule', false), type: 'submodule',
+            fileCount: 0, symbolCount: 0, edgeCount: 0, crossRepoEdgeCount: 0, lastScanned: null, headSha: null,
           });
         }
 
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify({ repos, discovered }, null, 2),
+            text: JSON.stringify({
+              root: dir,
+              repos,
+              crossRepoEdgeCount: pairs.reduce((a, p) => a + p.count, 0),
+              crossRepoEdges: pairs,
+              discovered,
+            }, null, 2),
           }],
         };
       }
@@ -2065,6 +2373,201 @@ Callees: ${callees.length}`;
         return { content: [{ type: 'text', text: warning + sections.join('\n\n') }] };
       }
 
+      case 'mapx_profile': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const profileStr = ctx.store.getMeta('codebase_profile:' + repo);
+        if (!profileStr) {
+          return { content: [{ type: 'text', text: `No codebase profile found for repo "${repo}". Run a scan first.` }] };
+        }
+        const profile = JSON.parse(profileStr);
+        const text = [
+          `Codebase Profile for repo "${repo}":`,
+          `  Archetype: ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`,
+          `  Detected Frameworks: ${profile.detectedFrameworks.join(', ') || 'none'}`,
+          `  Architecture Patterns: ${profile.detectedPatterns.join(', ') || 'none'}`,
+          `  Dominant Languages: ${profile.dominantLanguages.join(', ')}`,
+          `  Has Backend: ${profile.hasBackend}`,
+          `  Has Frontend: ${profile.hasFrontend}`,
+          `  Is Monorepo: ${profile.isMonorepo}`,
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_explain': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const file = (args as any)?.file;
+        if (!file) return { content: [{ type: 'text', text: 'Missing required parameter: file' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const fileRecord = ctx.store.getFile(file);
+        if (!fileRecord) {
+          return { content: [{ type: 'text', text: `File "${file}" not found in graph.` }] };
+        }
+
+        const signals = ctx.store.getClassificationSignals(file);
+        const role = fileRecord.role || 'other';
+        const confidence = typeof fileRecord.role_confidence === 'number' ? fileRecord.role_confidence : 0.5;
+
+        const text = [
+          `File Classification Explanation for: ${file}`,
+          `Role: ${role} (confidence: ${confidence.toFixed(2)})`,
+          `\nSignals:`,
+          ...signals.map((s: any) => `  [${s.source}] ${s.role.padEnd(12)} (conf: ${s.confidence.toFixed(2)}) - ${s.reason}`),
+          signals.length === 0 ? '  (none)' : '',
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_smells': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16).
+        const smells = currentSmells(ctx.store, dir, [repo], { primary: ctx.config.repo.name, repoPaths: Object.fromEntries(ctx.config.repos.map((r: { name: string; path: string }) => [r.name, r.path])) });
+
+        if (smells.length === 0) {
+          return { content: [{ type: 'text', text: `🟢 Clean! No architectural smells detected for repo "${repo}".` }] };
+        }
+
+        const text = [
+          `Architectural Smells for repo "${repo}":`,
+          ...smells.map((s: any) => {
+            const filesStr = s.involvedFiles.length > 0 ? `\n    Files: ${s.involvedFiles.join(', ')}` : '';
+            const clustersStr = s.involvedClusters && s.involvedClusters.length > 0 ? `\n    Clusters: ${s.involvedClusters.join(', ')}` : '';
+            const layersStr = s.involvedLayers && s.involvedLayers.length > 0 ? `\n    Layers: ${s.involvedLayers.join(', ')}` : '';
+            const sourceStr = s.source ? `\n    Source: ${s.source}` : '';
+            return `\n  [${s.severity.toUpperCase()}] ${s.type}\n    Description: ${s.description}${filesStr}${clustersStr}${layersStr}\n    Suggestion: ${s.suggestion}${sourceStr}`;
+          }),
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_dsm': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const dsm = calculateDSM(ctx.store, repo);
+
+        if (dsm.clusterNames.length === 0) {
+          return { content: [{ type: 'text', text: `No clusters found to build Dependency Structure Matrix (DSM).` }] };
+        }
+
+        const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
+        const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
+        const rows = dsm.clusterNames.map((name, i) => {
+          const cells = dsm.matrix[i].map((val, j) => {
+            if (i === j) return '   *';
+            if (val === 0) return '   .';
+            return val.toString().padStart(4);
+          }).join(' ');
+          return `${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`;
+        });
+
+        const key = dsm.clusterNames.map((name, idx) => `  C${idx + 1}: ${name}`).join('\n');
+        const text = [
+          `Dependency Structure Matrix (DSM) for "${repo}":`,
+          headers,
+          ...rows,
+          `\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`,
+          `\nCluster Key:\n${key}`
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_layers': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const files = ctx.store.getAllFiles(repo);
+        
+        const roleGroups = new Map<string, string[]>();
+        for (const f of files) {
+          const role = (f.role as string) || 'other';
+          if (!roleGroups.has(role)) {
+            roleGroups.set(role, []);
+          }
+          roleGroups.get(role)!.push(f.path as string);
+        }
+
+        const lines = [`Architectural Layers / Roles for "${repo}":`];
+        const sortedRoles = Array.from(roleGroups.keys()).sort();
+        for (const role of sortedRoles) {
+          const list = roleGroups.get(role)!;
+          lines.push(`\n  ${role.toUpperCase()} (${list.length} files):`);
+          for (const f of list.slice(0, 10)) {
+            lines.push(`    • ${f}`);
+          }
+          if (list.length > 10) {
+            lines.push(`    • ...and ${list.length - 10} more`);
+          }
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      // As `mapx arch validate-config` (M5-02-R1): problems are a tool error, like the CLI's exit 3.
+      case 'mapx_arch_validate_config': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }], isError: true };
+        const { view, format = 'json' } = (args ?? {}) as { view?: string; format?: string };
+        if (format !== 'json' && format !== 'text') return { content: [{ type: 'text', text: `Error: format must be json or text, not "${format}"` }], isError: true };
+        const { report, config } = validateArchitectureConfig(resolved.dir, { view });
+        const text = format === 'json' ? JSON.stringify(report, null, 2) : formatValidation(report, config ?? undefined);
+        return report.valid ? { content: [{ type: 'text', text }] } : { content: [{ type: 'text', text }], isError: true };
+      }
+
+      // Thin wrappers over `mapx check` and `mapx arch …` (M5-14): failures are tool errors with
+      // the AR-17 exit code in their JSON.
+      case 'mapx_arch_check':
+      case 'mapx_arch_layers':
+      case 'mapx_arch_allowed':
+      case 'mapx_arch_explain':
+      case 'mapx_arch_init': {
+        // A non-string dir is a usage error, not a JSON-RPC error (resolveDir's schema throws).
+        let resolved: ReturnType<typeof resolveOrFail>;
+        try {
+          resolved = resolveOrFail(args || {});
+        } catch {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: '"dir" must be a string', exitCode: 3 }, null, 2) }], isError: true };
+        }
+        if ('error' in resolved) return { content: [{ type: 'text', text: JSON.stringify({ error: resolved.error, exitCode: 3 }, null, 2) }], isError: true };
+        // Awaited, so the finally below closes the store the call opened.
+        return await runArchTool(name as ArchToolName, (args ?? {}) as Record<string, unknown>, resolved.dir, {
+          load: async () => {
+            const ctx = await loadCtx(resolved.dir);
+            if ('error' in ctx) throw new Error(ctx.error);
+            return ctx;
+          },
+          sync: (ctx) => new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { pool: mcpParsePool() }).scanIncremental(),
+        });
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -2100,8 +2603,10 @@ Callees: ${callees.length}`;
       if (options?.debug) {
         process.stderr.write(`[mapx debug] Completed tool call: ${request.params.name} in ${durationMs}ms (success: ${isSuccess})${errorMsg ? `, error: ${errorMsg}` : ''}\n`);
       }
+      // A mapx_arch_init dry run promises the workspace stays byte-identical: it is not logged.
+      const dryRun = request.params.name === 'mapx_arch_init' && (request.params.arguments as Record<string, unknown> | undefined)?.write !== true;
       const eventBus = UiEventBus.getInstance();
-      eventBus.emitToolCall({
+      if (!dryRun) eventBus.emitToolCall({
         tool: request.params.name,
         input: request.params.arguments || {},
         timestamp: new Date().toISOString(),
@@ -2195,7 +2700,9 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
     '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges,',
     '                    mapx_clusters, mapx_trace, mapx_sources, mapx_sinks, mapx_search, mapx_context, mapx_callers, mapx_callees,',
     '                    mapx_impact, mapx_node, mapx_files, mapx_routes, mapx_hooks, mapx_workspaces, mapx_agents_generate,',
-    '                    mapx_lang_list, mapx_lang_install, mapx_lang_uninstall',
+    '                    mapx_profile, mapx_explain, mapx_smells, mapx_dsm, mapx_layers, mapx_batch,',
+    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall, mapx_arch_validate_config,',
+    '                    mapx_arch_check, mapx_arch_layers, mapx_arch_allowed, mapx_arch_explain, mapx_arch_init',
     '',
   );
 
@@ -2218,8 +2725,8 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
 
   if (defaultDir) {
     process.stderr.write(`[mapx] Default project directory: ${defaultDir}\n`);
-    // Enable cross-process tool call logging for the UI dashboard
-    UiEventBus.getInstance().setMapxDir(defaultDir);
+    // Enable cross-process tool call logging for the UI dashboard, in an existing .mapx/ only.
+    if (existsSync(join(defaultDir, '.mapx'))) UiEventBus.getInstance().setMapxDir(defaultDir);
   } else {
     process.stderr.write(`[mapx] No default project directory set. Pass --dir /path/to/project or include "dir" in each tool call.\n`);
   }
@@ -2281,25 +2788,7 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
 }
 
 export function getStaleFilesCount(store: Store, dir: string): number {
-  try {
-    const files = store.getAllFiles();
-    let changedCount = 0;
-    for (const file of files) {
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) {
-          changedCount++;
-        }
-      } else {
-        changedCount++;
-      }
-    }
-    return changedCount;
-  } catch {
-    return 0;
-  }
+  return staleCount(findStaleFiles(store, dir));
 }
 
 /**
@@ -2307,36 +2796,26 @@ export function getStaleFilesCount(store: Store, dir: string): number {
  * Used for F44 enhanced staleness warnings.
  */
 export function getStaleFileNames(store: Store, dir: string, maxFiles: number = 5): string[] {
-  try {
-    const files = store.getAllFiles();
-    const changed: string[] = [];
-    for (const file of files) {
-      if (changed.length >= maxFiles) break;
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) {
-          changed.push(file.path as string);
-        }
-      } else {
-        changed.push(`${file.path} (deleted)`);
-      }
-    }
-    return changed;
-  } catch {
-    return [];
-  }
+  return staleNames(findStaleFiles(store, dir), maxFiles);
 }
 
 export function getMcpStalenessWarning(store: Store, dir: string): string {
-  const staleCount = getStaleFilesCount(store, dir);
-  if (staleCount > 0) {
-    const staleFiles = getStaleFileNames(store, dir);
+  // An index an older extractor built (M5-26).
+  const outdated = outdatedIndexWarning(store, 'run mapx_sync');
+  if (outdated) return `⚠️  ${outdated}\n\n` + getMcpStalenessWarningForFiles(store, dir);
+  return getMcpStalenessWarningForFiles(store, dir);
+}
+
+function getMcpStalenessWarningForFiles(store: Store, dir: string): string {
+  // One report, so one walk of the workspace, per tool call (M5-05-R1).
+  const report = findStaleFiles(store, dir);
+  const count = staleCount(report);
+  if (count > 0) {
+    const staleFiles = staleNames(report);
     const fileList = staleFiles.length > 0
-      ? `\nChanged: ${staleFiles.join(', ')}${staleCount > staleFiles.length ? ` (and ${staleCount - staleFiles.length} more)` : ''}`
+      ? `\nChanged: ${staleFiles.join(', ')}${count > staleFiles.length ? ` (and ${count - staleFiles.length} more)` : ''}`
       : '';
-    return `⚠️  Index is stale (${staleCount} file${staleCount !== 1 ? 's' : ''} changed since last scan). Run mapx_sync to update.${fileList}\n\n`;
+    return `⚠️  Index is stale (${count} file${count !== 1 ? 's' : ''} changed since last scan). Run mapx_sync to update.${fileList}\n\n`;
   }
   return '';
 }

@@ -1,0 +1,334 @@
+{
+  "at": "2026-11-01T19:07:51.485Z",
+  "chromium": "156.0.8078.4",
+  "bundle": {
+    "index.html": {
+      "bytes": 19738,
+      "gzip": 4264
+    },
+    "main.js": {
+      "bytes": 2270931,
+      "gzip": 690763
+    },
+    "styles.css": {
+      "bytes": 36344,
+      "gzip": 6965
+    }
+  },
+  "fixtures": {
+    "mapx-copy": {
+      "graph": {
+        "ms": 700,
+        "nodes": 383,
+        "payloadBytes": 360954,
+        "longTasks": {
+          "count": 2,
+          "maxMs": 133,
+          "totalMs": 230
+        }
+      },
+      "fullGraph": {
+        "settledMs": 1034,
+        "longTasks": 2
+      },
+      "tabs": {
+        "graph": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 25
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "nodes": 5,
+              "help": "Elements must meet minimum color contrast ratio thresholds"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "nodes": 4,
+              "help": "Select element must have an accessible name"
+            }
+          ]
+        },
+        "symbols": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 65
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            }
+          ]
+        },
+        "routes": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 101
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 31
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "nodes": 25,
+              "help": "Elements must meet minimum color contrast ratio thresholds"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            }
+          ]
+        },
+        "architecture": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 23
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 360
+            }
+          },
+          "axe": [
+            {
+              "id": "empty-table-header",
+              "impact": "minor",
+              "nodes": 1,
+              "help": "Table header text should not be empty"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            },
+            {
+              "id": "scrollable-region-focusable",
+              "impact": "serious",
+              "nodes": 3,
+              "help": "Scrollable region must have keyboard access"
+            }
+          ]
+        },
+        "context": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "nodes": 6,
+              "help": "Elements must meet minimum color contrast ratio thresholds"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            }
+          ]
+        },
+        "metrics": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 70
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "nodes": 8,
+              "help": "Elements must meet minimum color contrast ratio thresholds"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            },
+            {
+              "id": "scrollable-region-focusable",
+              "impact": "serious",
+              "nodes": 1,
+              "help": "Scrollable region must have keyboard access"
+            }
+          ]
+        },
+        "tool-log": {
+          "viewports": {
+            "390": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1024": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            },
+            "1440": {
+              "consoleErrors": [],
+              "failedApi": [],
+              "horizontalOverflow": false,
+              "clippedElements": 0
+            }
+          },
+          "axe": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "nodes": 6,
+              "help": "Elements must meet minimum color contrast ratio thresholds"
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "nodes": 1,
+              "help": "Page should contain a level-one heading"
+            }
+          ]
+        }
+      }
+    },
+    "generated-500": {
+      "graph": {
+        "ms": 602,
+        "nodes": 500,
+        "payloadBytes": 253160,
+        "longTasks": {
+          "count": 1,
+          "maxMs": 130,
+          "totalMs": 130
+        }
+      },
+      "fullGraph": {
+        "settledMs": 608,
+        "longTasks": 2
+      }
+    },
+    "generated-2000": {
+      "graph": {
+        "ms": 1786,
+        "nodes": 2000,
+        "payloadBytes": 1022302,
+        "longTasks": {
+          "count": 3,
+          "maxMs": 822,
+          "totalMs": 1085
+        }
+      },
+      "fullGraph": {
+        "settledMs": 10636,
+        "longTasks": 2
+      }
+    }
+  }
+}

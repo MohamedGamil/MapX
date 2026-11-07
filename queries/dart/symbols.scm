@@ -1,38 +1,49 @@
-; Dart Symbol Extraction Queries
+; Dart / Flutter Symbol Extraction Queries
 
-; Classes
+; ─── Classes (including abstract, sealed, base, final, interface) ────────────
 (class_definition
-  name: (type_identifier) @symbol.name) @symbol.kind_class
+  name: (identifier) @symbol.name) @symbol.kind_class
 
-; Enums
+; ─── Enums ───────────────────────────────────────────────────────────────────
 (enum_declaration
-  name: (type_identifier) @symbol.name) @symbol.kind_enum
+  name: (identifier) @symbol.name) @symbol.kind_enum
 
-; Mixins
+; ─── Mixins ──────────────────────────────────────────────────────────────────
 (mixin_declaration
-  name: (type_identifier) @symbol.name) @symbol.kind_trait
+  (identifier) @symbol.name) @symbol.kind_trait
 
-; Extensions
+; ─── Extensions ──────────────────────────────────────────────────────────────
 (extension_declaration
-  name: (type_identifier) @symbol.name) @symbol.kind_class
+  name: (identifier) @symbol.name) @symbol.kind_class
 
-; Functions
+; ─── Top-level Functions & Methods ───────────────────────────────────────────
 (function_signature
   name: (identifier) @symbol.name) @symbol.kind_function
 
-; Methods
-(method_signature
-  name: (identifier) @symbol.name) @symbol.kind_method
+; ─── Getters ─────────────────────────────────────────────────────────────────
+(getter_signature
+  name: (identifier) @symbol.name) @symbol.kind_property
 
-; Constructor declarations
+; ─── Setters ─────────────────────────────────────────────────────────────────
+(setter_signature
+  name: (identifier) @symbol.name) @symbol.kind_property
+
+; ─── Constructors ────────────────────────────────────────────────────────────
 (constructor_signature
   name: (identifier) @symbol.name) @symbol.kind_method
 
-; Top-level constant/variable declarations
-(top_level_definition
-  (final_builtin_declaration
-    (identifier) @symbol.name)) @symbol.kind_constant
+(factory_constructor_signature
+  (identifier) @symbol.name) @symbol.kind_method
 
-(top_level_definition
-  (const_builtin_declaration
-    (identifier) @symbol.name)) @symbol.kind_constant
+; ─── Typedefs (Dart type alias) ─────────────────────────────────────────────
+(type_alias
+  (type_identifier) @symbol.name) @symbol.kind_constant
+
+; ─── Enum member constants ───────────────────────────────────────────────────
+(enum_constant
+  (identifier) @symbol.name) @symbol.kind_constant
+
+; ─── Library / Namespace ──────────────────────────────────────────────────────
+; The whole dotted name: `library acme.domain;` is `acme.domain` (M5-03-R1).
+(library_name
+  (dotted_identifier_list) @symbol.name) @symbol.kind_namespace

@@ -2,29 +2,19 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import { hasPackageJsonDependency } from '../utils.js';
 
 export class TanstackRouterDetector implements FrameworkDetector {
   readonly name = 'tanstack-router';
   readonly language = 'typescript';
   readonly filePattern = /\.(js|jsx|ts|tsx)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['@tanstack/react-router'] };
 
   private projectFiles: string[] = [];
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
     this.projectFiles = files;
-    const packageJsonPath = join(projectRoot, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if (deps && deps['@tanstack/react-router']) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return false;
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

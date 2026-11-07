@@ -1,0 +1,4 @@
+{
+  "name": "fixture/hierarchy-php",
+  "autoload": { "psr-4": { "App\\": "app/" } }
+}

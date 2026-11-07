@@ -1,0 +1,4 @@
+// Synthetic (M5-02-R1): a valid document outside .mapx/architecture/ that no view may load.
+{
+  "layers": [{ "name": "Outside", "selectors": [{ "path": "**" }] }]
+}

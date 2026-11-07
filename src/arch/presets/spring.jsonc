@@ -1,0 +1,40 @@
+// mapx:preset/spring: a Spring Boot application.
+// AR-15 (M5-17-R1). By Spring's stereotype annotations, which MapX stores as decorators, and by
+// Spring Data ancestry wherever a class lives; the package names stay the fallback for classes
+// without them. Controllers reach the repositories only through services, and may map entities to
+// DTOs; entities depend on nothing.
+// No parameters: the annotations and package names place every file, in whichever module it is.
+{
+  "layers": [
+    // @Controller and @RestController classes, and their advice: the HTTP surface.
+    { "name": "Controller", "selectors": [
+      { "path": "**/{controller,controllers,web,rest}/**" },
+      { "decorator": "/^(Rest)?Controller(Advice)?$/", "members": true }
+    ] },
+    // @Configuration classes: the application context's wiring.
+    { "name": "Config", "selectors": [{ "path": "**/{config,configuration}/**" }, { "decorator": "Configuration", "members": true }] },
+    // @Service classes: the use cases.
+    { "name": "Service", "selectors": [{ "path": "**/{service,services}/**" }, { "decorator": "Service", "members": true }] },
+    // @Repository classes and Spring Data repositories (any type extending one of its interfaces).
+    { "name": "Repository", "selectors": [
+      { "path": "**/{repository,repositories}/**" },
+      { "decorator": "Repository", "members": true },
+      { "inherits": "/^org\\.springframework\\.data\\./" }
+    ] },
+    // Request and response objects.
+    { "name": "Dto", "selectors": [{ "path": "**/{dto,dtos}/**" }] },
+    // JPA entities and embeddables.
+    { "name": "Entity", "selectors": [
+      { "path": "**/{domain,entity,entities,model}/**" },
+      { "decorator": "/^(Entity|Embeddable|MappedSuperclass)$/", "members": true }
+    ] }
+  ],
+  "rules": {
+    "Controller": ["Service", "Dto", "Entity"],
+    "Config": ["Service", "Repository"],
+    "Service": ["Repository", "Entity", "Dto"],
+    "Repository": ["Entity"],
+    "Dto": ["Entity"],
+    "Entity": []
+  }
+}

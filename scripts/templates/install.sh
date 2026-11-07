@@ -99,11 +99,14 @@ check_existing() {
     local target="$PREFIX/mapx"
     if [ -f "$target" ]; then
         local existing_version
-        existing_version="$("$target" --version 2>/dev/null | grep -oP '[\d.]+' || echo "unknown")"
+        # POSIX sed, not GNU grep with Perl regexes, which macOS lacks (M0-07-R7).
+        existing_version="$("$target" --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9.]*\).*/\1/p' | head -n 1)" || true
+        [ -n "$existing_version" ] || existing_version="unknown"
         warn "Existing installation found at $target (v$existing_version)"
         if [ "$FORCE" != true ]; then
-            read -rp "Overwrite? [y/N] " confirm
-            [[ "$confirm" =~ ^[Yy]$ ]] || die "Aborted"
+            # No answer (stdin at EOF: a pipe with no terminal) is a no, not a silent set -e exit (M0-07-R5).
+            read -rp "Overwrite? [y/N] " confirm || confirm=""
+            [[ "$confirm" =~ ^[Yy]$ ]] || die "Aborted: not overwriting without a yes (pass --force to overwrite without asking)"
         fi
     fi
 }
@@ -156,7 +159,7 @@ add_to_path() {
             if [ "$FORCE" = true ]; then
                 confirm="y"
             else
-                read -rp "Add $PREFIX to PATH in $shell_rc? [y/N] " confirm
+                read -rp "Add $PREFIX to PATH in $shell_rc? [y/N] " confirm || confirm=""
             fi
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 printf '\n# Added by MapxGraph installer\nexport PATH="%s:$PATH"\n' "$PREFIX" >> "$shell_rc"
@@ -168,6 +171,54 @@ add_to_path() {
 
     info "Add this to your shell config to use mapx:"
     echo "    export PATH=\"$PREFIX:\$PATH\""
+}
+
+# The file a symlink chain ends at: `readlink -f` where it exists, else one link at a time.
+resolve_link() {
+    local path="$1" link n=0
+    if readlink -f / >/dev/null 2>&1; then
+        readlink -f "$path"
+        return
+    fi
+    while [ -L "$path" ] && [ "$n" -lt 40 ]; do
+        link="$(readlink "$path")"
+        case "$link" in
+            /*) path="$link" ;;
+            *)  path="$(dirname "$path")/$link" ;;
+        esac
+        n=$((n + 1))
+    done
+    printf '%s\n' "$path"
+}
+
+# Installs $1 as $2 (M4-29). `cp` onto a binary that `mapx serve` processes run fails with "Text
+# file busy", so the binary is written to a temp file in the target's folder and renamed over it:
+# the rename is atomic, and running processes keep the old file until they exit. A symlinked target
+# is replaced at the file it points to, so the link keeps working. The temp file is removed if the
+# install fails or is interrupted.
+_MAPX_TMP=""
+install_binary() {
+    local src="$1" target="$2" dir
+    if [ -L "$target" ]; then target="$(resolve_link "$target")"; fi
+    dir="$(dirname "$target")"
+    if ! _MAPX_TMP="$(mktemp "$dir/.mapx.XXXXXX" 2>/dev/null)"; then
+        _MAPX_TMP=""
+        # A writable binary in a folder we cannot write: overwrite it in place, as before.
+        [ -w "$target" ] || die "Cannot write to $dir"
+        warn "Cannot create a file in $dir; overwriting $target in place (this fails while mapx runs)"
+        cp "$src" "$target"
+        chmod +x "$target"
+        return
+    fi
+    trap 'rm -f "$_MAPX_TMP"' EXIT
+    trap 'rm -f "$_MAPX_TMP"; exit 130' INT
+    trap 'rm -f "$_MAPX_TMP"; exit 143' TERM
+    if ! { cp "$src" "$_MAPX_TMP" && chmod 755 "$_MAPX_TMP" && mv -f "$_MAPX_TMP" "$target"; }; then
+        rm -f "$_MAPX_TMP"
+        die "Could not install $target"
+    fi
+    _MAPX_TMP=""
+    trap - EXIT INT TERM
 }
 
 do_install() {
@@ -186,8 +237,7 @@ do_install() {
     echo ""
 
     mkdir -p "$PREFIX"
-    cp "$binary" "$PREFIX/mapx"
-    chmod +x "$PREFIX/mapx"
+    install_binary "$binary" "$PREFIX/mapx"
     ok "Binary: $PREFIX/mapx"
 
     install_data
@@ -203,7 +253,9 @@ do_install() {
     echo "    mapx scan"
     echo "    mapx export"
     echo ""
-    echo "Uninstall: $0 --uninstall"
+    # From a self-extracting installer, $0 is a deleted temp copy: name the installer (M0-07-R3), or,
+    # when it ran from a pipe and there is no installer file, the command that runs it again (M0-07-R5).
+    echo "Uninstall: ${MAPX_UNINSTALL_HINT:-${MAPX_INSTALLER:-$0} --uninstall}"
 }
 
 do_uninstall() {
@@ -234,7 +286,7 @@ do_uninstall() {
         if [ "$FORCE" = true ]; then
             confirm="y"
         else
-            read -rp "Remove data directory $DATA_DIR? [y/N] " confirm
+            read -rp "Remove data directory $DATA_DIR? [y/N] " confirm || confirm=""
         fi
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
             rm -rf "$DATA_DIR"

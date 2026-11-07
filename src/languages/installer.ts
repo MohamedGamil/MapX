@@ -1,131 +1,86 @@
-import { join, resolve, dirname, isAbsolute } from 'node:path';
-import { homedir } from 'node:os';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, copyFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
+// Language grammar "installation" (D010): every grammar ships bundled in the package's wasm/ and
+// queries/ directories, so there is nothing to install or uninstall. These functions keep the
+// `mapx lang install/uninstall` and mapx_lang_* surfaces working with an honest answer.
+import { existsSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
+import { findAssetRoot } from '../parsers/assets.js';
+import { getBuiltinLanguages, type LanguageDefinition } from './registry.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const languages = (): Record<string, LanguageDefinition> => getBuiltinLanguages();
 
-async function downloadFile(url: string, destPath: string): Promise<void> {
-  try {
-    execSync(`curl -L -s -f -o "${destPath}" "${url}"`, { stdio: 'ignore' });
-    if (existsSync(destPath)) return;
-  } catch {
-    // Ignore and fallback to fetch
-  }
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to download from ${url}: HTTP ${res.status}`);
-  }
-  const buf = await res.arrayBuffer();
-  writeFileSync(destPath, Buffer.from(buf));
+function known(name: string): LanguageDefinition {
+  const def = languages()[name];
+  if (!def) throw new Error(`Unknown language '${name}'. Supported: ${Object.keys(languages()).join(', ')}`);
+  return def;
 }
 
-export const GRAMMARS_DIR = join(homedir(), '.mapx', 'grammars');
-export const QUERIES_DIR = join(GRAMMARS_DIR, 'queries');
-
-export interface InstallableLanguageInfo {
-  name: string;
-  package: string;
-  file: string;
-}
-
-export const INSTALLABLE_LANGUAGES: Record<string, InstallableLanguageInfo> = {
-  ruby: { name: 'ruby', package: 'tree-sitter-ruby', file: 'tree-sitter-ruby.wasm' },
-  c: { name: 'c', package: 'tree-sitter-c', file: 'tree-sitter-c.wasm' },
-  cpp: { name: 'cpp', package: 'tree-sitter-cpp', file: 'tree-sitter-cpp.wasm' },
-  swift: { name: 'swift', package: 'tree-sitter-swift', file: 'tree-sitter-swift.wasm' },
-  kotlin: { name: 'kotlin', package: 'tree-sitter-kotlin', file: 'tree-sitter-kotlin.wasm' },
-  svelte: { name: 'svelte', package: 'tree-sitter-svelte', file: 'tree-sitter-svelte.wasm' },
-  vue: { name: 'vue', package: 'tree-sitter-vue', file: 'tree-sitter-vue.wasm' },
-  lua: { name: 'lua', package: 'tree-sitter-lua', file: 'tree-sitter-lua.wasm' },
-  elixir: { name: 'elixir', package: 'tree-sitter-elixir', file: 'tree-sitter-elixir.wasm' },
-  zig: { name: 'zig', package: 'tree-sitter-zig', file: 'tree-sitter-zig.wasm' },
-  bash: { name: 'bash', package: 'tree-sitter-bash', file: 'tree-sitter-bash.wasm' },
-  pascal: { name: 'pascal', package: 'tree-sitter-pascal', file: 'tree-sitter-pascal.wasm' },
-  dart: { name: 'dart', package: 'tree-sitter-dart', file: 'tree-sitter-dart.wasm' },
-  scala: { name: 'scala', package: 'tree-sitter-scala', file: 'tree-sitter-scala.wasm' },
-};
-
+/**
+ * A supported language is available when its bundled grammar file is present (static file types
+ * need none). A missing WASM means a broken install, not an uninstalled language (M0-12-R6).
+ */
 export function isLanguageInstalled(name: string): boolean {
-  // Built-in/bundled languages are considered always installed (they are loaded from the package)
-  const builtins = [
-    'php', 'javascript', 'typescript', 'python', 'go', 'rust', 'java', 'c-sharp',
-    'ruby', 'c', 'cpp', 'swift', 'kotlin', 'scala', 'vue',
-    'svelte', 'lua', 'elixir', 'zig', 'bash', 'pascal', 'dart'
+  if (!(name in languages())) return false;
+  const info = describeLanguage(name);
+  return !info.grammar || info.grammarPresent;
+}
+
+/** Returns a message: all grammars are bundled, nothing is downloaded or copied. */
+export async function installLanguage(name: string): Promise<string> {
+  known(name);
+  return `'${name}' is bundled with MapX; nothing to install.`;
+}
+
+/** Returns a message: bundled grammars cannot be removed (exclude files instead). */
+export async function uninstallLanguage(name: string): Promise<string> {
+  known(name);
+  return `'${name}' is bundled with MapX and cannot be uninstalled. To skip its files, add an exclude pattern (e.g. \`mapx scan --exclude "**/*${known(name).extensions[0] ?? ''}"\`).`;
+}
+
+export interface LanguageInfo {
+  name: string;
+  tier: string;
+  extensions: string[];
+  filenames: string[];
+  grammar: string | null;
+  grammarPresent: boolean;
+  queries: string[];
+}
+
+/** Details for `mapx lang info`. */
+export function describeLanguage(name: string): LanguageInfo {
+  const def = known(name);
+  const root = findAssetRoot(import.meta.url);
+  const abs = (p: string) => (isAbsolute(p) ? p : resolve(root, p));
+  const grammar = def.grammarWasm ? abs(def.grammarWasm) : null;
+  const queries = def.queries ? [def.queries.symbols, def.queries.references].filter(Boolean).map(abs) : [];
+  return { name: def.name, tier: def.tier, extensions: def.extensions, filenames: def.filenames ?? [], grammar, grammarPresent: !!grammar && existsSync(grammar), queries };
+}
+
+const fileMatches = (def: { extensions: string[]; filenames?: string[] }) => [...def.extensions, ...(def.filenames ?? [])].join(', ');
+
+/** Text of `mapx lang list` and `mapx_lang_list` (one formatter keeps the CLI and MCP in step). */
+export function formatLanguageList(): string {
+  const rows = Object.entries(languages()).map(([name, def]) => {
+    const status = isLanguageInstalled(name) ? 'bundled' : 'missing';
+    return { status, line: `  - ${name} (${fileMatches(def)} | tier: ${def.tier} | status: ${status})` };
+  });
+  const missing = rows.filter((r) => r.status === 'missing').length;
+  const header = missing
+    ? `Supported languages (${missing} grammar ${missing === 1 ? 'file is' : 'files are'} missing; reinstall MapX):`
+    : 'Supported languages (all grammars are bundled):';
+  return [header, ...rows.map((r) => r.line)].join('\n');
+}
+
+/** Text of `mapx lang info <lang>` and `mapx_lang_info`; throws on an unknown language. */
+export function formatLanguageInfo(name: string): string {
+  const info = describeLanguage(name);
+  const lines = [
+    info.name,
+    `  Tier:       ${info.tier}`,
+    `  Extensions: ${info.extensions.join(', ')}`,
   ];
-  if (builtins.includes(name)) return true;
-
-  const info = INSTALLABLE_LANGUAGES[name];
-  if (!info) return false;
-
-  const wasmPath = join(GRAMMARS_DIR, info.file);
-  const symPath = join(QUERIES_DIR, name, 'symbols.scm');
-  const refPath = join(QUERIES_DIR, name, 'references.scm');
-
-  return existsSync(wasmPath) && existsSync(symPath) && existsSync(refPath);
-}
-
-export async function installLanguage(name: string): Promise<void> {
-  const info = INSTALLABLE_LANGUAGES[name];
-  if (!info) {
-    throw new Error(`Language '${name}' is not supported for installation. Supported: ${Object.keys(INSTALLABLE_LANGUAGES).join(', ')}`);
-  }
-
-  // Create dirs
-  mkdirSync(join(QUERIES_DIR, name), { recursive: true });
-
-  const targetWasm = join(GRAMMARS_DIR, info.file);
-  const targetSym = join(QUERIES_DIR, name, 'symbols.scm');
-  const targetRef = join(QUERIES_DIR, name, 'references.scm');
-
-  // Find local workspace files first (offline/dev support)
-  const packageRoot = resolve(__dirname, '..', '..');
-  const localWasm = join(packageRoot, 'wasm', info.file);
-  const localSym = join(packageRoot, 'queries', name, 'symbols.scm');
-  const localRef = join(packageRoot, 'queries', name, 'references.scm');
-
-  // Copy WASM
-  if (existsSync(localWasm)) {
-    copyFileSync(localWasm, targetWasm);
-  } else {
-    const wasmUrl = `https://unpkg.com/${info.package}@latest/${info.file}`;
-    console.log(`Downloading WASM from ${wasmUrl}...`);
-    await downloadFile(wasmUrl, targetWasm);
-  }
-
-  // Copy Symbols query
-  if (existsSync(localSym)) {
-    copyFileSync(localSym, targetSym);
-  } else {
-    const symUrl = `https://raw.githubusercontent.com/MohamedGamil/mapx/main/queries/${name}/symbols.scm`;
-    console.log(`Downloading symbols query from ${symUrl}...`);
-    await downloadFile(symUrl, targetSym);
-  }
-
-  // Copy References query
-  if (existsSync(localRef)) {
-    copyFileSync(localRef, targetRef);
-  } else {
-    const refUrl = `https://raw.githubusercontent.com/MohamedGamil/mapx/main/queries/${name}/references.scm`;
-    console.log(`Downloading references query from ${refUrl}...`);
-    await downloadFile(refUrl, targetRef);
-  }
-}
-
-export async function uninstallLanguage(name: string): Promise<void> {
-  const info = INSTALLABLE_LANGUAGES[name];
-  if (!info) {
-    throw new Error(`Language '${name}' is not supported for dynamic installation.`);
-  }
-
-  const targetWasm = join(GRAMMARS_DIR, info.file);
-  const targetSym = join(QUERIES_DIR, name, 'symbols.scm');
-  const targetRef = join(QUERIES_DIR, name, 'references.scm');
-
-  if (existsSync(targetWasm)) unlinkSync(targetWasm);
-  if (existsSync(targetSym)) unlinkSync(targetSym);
-  if (existsSync(targetRef)) unlinkSync(targetRef);
+  if (info.filenames.length) lines.push(`  File names: ${info.filenames.join(', ')}`);
+  lines.push(`  Grammar:    ${info.grammar ? `${info.grammar}${info.grammarPresent ? '' : ' (missing!)'}` : 'none (static parser)'}`);
+  if (info.queries.length) lines.push(`  Queries:    ${info.queries.join(', ')}`);
+  return lines.join('\n');
 }

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "rule": "disallowed-layer",
+      "source": "App\\Domain\\Money",
+      "target": "App\\Infrastructure\\SqlOrderRepository",
+      "edgeType": "instantiation"
+    }
+  ],
+  "skip_violations": {
+    "App\\Domain\\Order": [
+      "App\\Infrastructure\\SqlOrderRepository"
+    ]
+  }
+}

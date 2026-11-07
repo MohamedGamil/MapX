@@ -10,6 +10,6 @@
 
 ; Alias definitions: alias foo='bar'
 (command
-  name: (word) @_alias
+  name: (command_name) @_alias
   argument: (word) @symbol.name
   (#eq? @_alias "alias")) @symbol.kind_constant
