@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@46231a3d6a44f68bf0f8ba3857c5a6899b742231 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@59649af7c565e2227095e6caac98298b9ec973b2 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M7-02 — Documentation section built from docs/ with sidebar, search and link rewriting.
-Evidence: `npx vitest run tests/site-docs.test.ts` (exit 0) → docs/baton/reports/M7-02.md; `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-02.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-02.md; `npm run check` (exit 0) → docs/baton/reports/M7-02.md.
+Last completed: M7-03 — Landing page: hero, capabilities, install, integrations.
+Evidence: `npx vitest run tests/site-landing.test.ts` (exit 0) → docs/baton/reports/M7-03.md; `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-03.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-03.md; `npm run check` (exit 0) → docs/baton/reports/M7-03.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M6-01 — Large-graph fixtures and baseline measurements for the graph and Architecture views. Prerequisites: M4-20, M5-15. Read docs/baton/iterations/M6-01.md. Objective: Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap. Expected outputs: scripts/ui/gen-large-workspace.ts; tests/ui/perf-scale.spec.ts; reports/M6-01.md. Verify: `npx playwright test tests/ui/perf-scale.spec.ts`.
-Also eligible: M7-03, M7-05, M0-07-R6, M2-08-R10, M2-15.
+Also eligible: M7-05, M7-06, M0-07-R6, M2-08-R10, M2-15.
 Active work: none. One active iteration per owner.
 
 ## Observe

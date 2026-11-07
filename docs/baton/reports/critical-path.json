@@ -5972,9 +5972,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 34,
-        "latestFinish": 34,
-        "slack": 34
+        "latestStart": 42,
+        "latestFinish": 42,
+        "slack": 42
       },
       {
         "id": "M7-02",
@@ -5987,12 +5987,12 @@
       },
       {
         "id": "M7-03",
-        "duration": 8,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 8,
-        "latestStart": 34,
+        "earliestFinish": 0,
+        "latestStart": 42,
         "latestFinish": 42,
-        "slack": 34
+        "slack": 42
       },
       {
         "id": "M7-04",
@@ -6015,38 +6015,38 @@
       {
         "id": "M7-06",
         "duration": 6,
-        "earliestStart": 8,
-        "earliestFinish": 14,
+        "earliestStart": 0,
+        "earliestFinish": 6,
         "latestStart": 42,
         "latestFinish": 48,
-        "slack": 34
+        "slack": 42
       },
       {
         "id": "M7-07",
         "duration": 6,
-        "earliestStart": 8,
-        "earliestFinish": 14,
+        "earliestStart": 0,
+        "earliestFinish": 6,
         "latestStart": 45,
         "latestFinish": 51,
-        "slack": 37
+        "slack": 45
       },
       {
         "id": "M7-98",
         "duration": 3,
-        "earliestStart": 14,
-        "earliestFinish": 17,
+        "earliestStart": 6,
+        "earliestFinish": 9,
         "latestStart": 48,
         "latestFinish": 51,
-        "slack": 34
+        "slack": 42
       }
     ],
-    "totalEffort": 228
+    "totalEffort": 220
   },
   "resourceSchedule": {
-    "hours": 228,
-    "weeks": 11.4,
+    "hours": 220,
+    "weeks": 11,
     "forecastAsOf": "2026-11-07",
-    "conditionalDate": "2027-01-25",
+    "conditionalDate": "2027-01-23",
     "assignments": [
       {
         "id": "M0-01",
@@ -8014,37 +8014,37 @@
         "id": "M7-03",
         "worker": 0,
         "start": 201,
-        "finish": 209
+        "finish": 201
       },
       {
         "id": "M7-04",
         "worker": 0,
-        "start": 209,
-        "finish": 209
+        "start": 201,
+        "finish": 201
       },
       {
         "id": "M7-05",
         "worker": 0,
-        "start": 209,
-        "finish": 213
+        "start": 201,
+        "finish": 205
       },
       {
         "id": "M7-06",
         "worker": 0,
-        "start": 213,
-        "finish": 219
+        "start": 205,
+        "finish": 211
       },
       {
         "id": "M7-07",
         "worker": 0,
-        "start": 219,
-        "finish": 225
+        "start": 211,
+        "finish": 217
       },
       {
         "id": "M7-98",
         "worker": 0,
-        "start": 225,
-        "finish": 228
+        "start": 217,
+        "finish": 220
       }
     ]
   }

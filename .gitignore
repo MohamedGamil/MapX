@@ -68,3 +68,4 @@ site/docs/
 site/.vitepress/cache/
 site/.vitepress/dist/
 site/.build.lock/
+site/.vitepress/facts.json

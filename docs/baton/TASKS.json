@@ -35582,15 +35582,84 @@
         "docs/baton/PROJECT_STATE.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-site",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-07T00:50:13.306Z",
+      "completedAt": "2026-11-07T01:31:22.208Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M7-03.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/site-landing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-03.md"
+        },
+        {
+          "command": "npx playwright test -c playwright.site.config.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-03.md"
+        },
+        {
+          "command": "npm run site:build",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-03.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-03.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-07T00:50:12.727Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T00:50:13.306Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:31:21.706Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:31:22.208Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/site-landing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-03.md"
+            },
+            {
+              "command": "npx playwright test -c playwright.site.config.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-03.md"
+            },
+            {
+              "command": "npm run site:build",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-03.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-03.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -35598,7 +35667,7 @@
       "id": "M7-03",
       "title": "Landing page: hero, capabilities, install, integrations",
       "objective": "The home page presents what MapX is and how to start in one screen, with every count (MCP tools, languages, frameworks, presets) read from the code at build time rather than typed.",
-      "description": "Content is drawn from README.md (\"Why MapX?\", install, MCP and CLI examples) and the dashboard. Hero, three-to-four capability blocks (local index, MCP answers, incremental sync, architecture rules in CI), install block with the commands the README documents (tested verbatim by tests/helpers/installer-docs.ts), supported-languages grid, agent integrations list, links to docs, GitHub and npm. Light and dark themes; usable at 360 px.",
+      "description": "Content is drawn from README.md (\"Why MapX?\", install, MCP and CLI examples) and the dashboard. Hero, three-to-four capability blocks (local index, MCP answers, incremental sync, architecture rules in CI), install block with the commands the README documents (tested verbatim by tests/helpers/installer-docs.ts), supported-languages grid, agent integrations list, links to docs, GitHub and npm. Light and dark themes; usable at 360 px. Design (M7-03 spec): `scripts/site/site-facts.ts` runs inside `site:sync` (tsx, where the repo code is importable) and writes the gitignored `site/.vitepress/facts.json`; the landing components import it, so VitePress never imports `src/`.",
       "estimate": {
         "min": 5,
         "expected": 8,
@@ -35615,27 +35684,35 @@
         }
       ],
       "outputs": [
-        "site/index.md",
-        "site/.vitepress/theme/components/**",
         "scripts/site/site-facts.ts",
+        "site/.vitepress/theme/Landing.vue",
+        "site/.vitepress/theme/components/**",
+        "site/index.md",
         "tests/site-landing.test.ts",
+        "tests/site/landing.spec.ts",
         "reports/M7-03.md"
       ],
       "affectedFiles": [
+        "scripts/site/**",
         "site/index.md",
         "site/.vitepress/theme/**",
-        "scripts/site/**",
-        "tests/site-landing.test.ts"
+        "site/.vitepress/config.ts",
+        "tests/site-landing.test.ts",
+        "tests/site/**",
+        ".gitignore"
       ],
       "acceptanceCriteria": [
-        "The built home page states the MCP tool count, language count, framework count and preset count, and each equals the value the code reports (the same sources tests/docs-surface.test.ts uses); changing a count source makes the test fail (mutation check).",
-        "The install commands on the page equal those in README.md (test compares the strings).",
-        "At 360 px and 1280 px, in light and dark, the page has no horizontal scroll and the h1 is visible without scrolling (Playwright spec).",
-        "The page has one h1, a meta description of 50-160 characters and an Open Graph title and description (test on built HTML)."
+        "The built home page states the MCP tool count, language count, framework count and preset count, and each equals the value computed directly from the code in the test (`buildServer().listTools()`, `supportedLanguageCount()`, `FrameworkRegistry` detectors, `Object.keys(PRESETS)`), not from the site generator; making the generator add 1 to a count fails the test (mutation check).",
+        "The language grid lists exactly the registry languages (every non-static language, TSX counted as TypeScript) and the integrations list lists the agent templates the generator can write; a language or agent without a display name fails the sync.",
+        "The install commands and the MCP configuration snippet on the page equal those in README.md (test compares the strings, so a README change that is not mirrored fails).",
+        "At 360 px and 1280 px, in light and dark, the page has no horizontal scroll, the h1 and the primary \"Get started\" button are visible without scrolling, and the \"Get started\" link reaches the getting-started guide under the base path (Playwright spec).",
+        "The built page has exactly one h1, a meta description of 50-160 characters, Open Graph title, description and image tags, and every link on it resolves (test on built HTML plus the M7-02 crawl style)."
       ],
       "verificationCommands": [
         "npx vitest run tests/site-landing.test.ts",
-        "npm run site:build"
+        "npx playwright test -c playwright.site.config.ts",
+        "npm run site:build",
+        "npm run check"
       ]
     },
     {

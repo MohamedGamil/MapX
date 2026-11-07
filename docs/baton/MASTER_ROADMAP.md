@@ -368,7 +368,7 @@ A landing page, a documentation section built from docs/, and an About the autho
 
 - **M7-01** Site scaffold, brand theme and one-command build (site/ workspace) — DONE, P1, 8h; depends on nothing.
 - **M7-02** Documentation section built from docs/ with sidebar, search and link rewriting — DONE, P1, 8h; depends on M7-01.
-- **M7-03** Landing page: hero, capabilities, install, integrations — BACKLOG, P1, 8h; depends on M7-01.
+- **M7-03** Landing page: hero, capabilities, install, integrations — DONE, P1, 8h; depends on M7-01.
 - **M7-04** About the author page (Mohamed Gamil) — CANCELLED, P1, 3h; depends on M7-01.
 - **M7-05** GitHub Pages deploy workflow and CI build check — BACKLOG, P1, 4h; depends on M7-01.
 - **M7-06** Site quality: SEO, accessibility, links and size budgets — BACKLOG, P1, 6h; depends on M7-02, M7-03.

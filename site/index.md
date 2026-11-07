@@ -1,10 +1,11 @@
 ---
 layout: home
 title: MapX
+titleTemplate: Local code graph memory for LLMs
 hero:
   name: MapX
   text: Local code graph memory for LLMs
-  tagline: Scan your codebase once, then query symbols, dependencies and impact without re-reading files.
+  tagline: Scan your codebase once, then query symbols, dependencies, impact and architecture rules without re-reading files.
   image:
     src: /mapx-logo.png
     alt: MapX logo
@@ -13,6 +14,6 @@ hero:
       text: Get started
       link: /docs/getting-started
     - theme: alt
-      text: GitHub
+      text: View on GitHub
       link: https://github.com/MohamedGamil/mapx
 ---

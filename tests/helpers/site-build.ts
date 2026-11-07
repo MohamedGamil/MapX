@@ -4,7 +4,7 @@
 // serialises every test that builds. A lock older than STALE_MS belongs to a killed process and is taken
 // over. A hand-run `npm run site:build` does not take the lock.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,4 +50,13 @@ export function buildSite(out: string, base?: string): void {
     const r = spawnSync('npm', ['run', 'site:build', '--silent'], { cwd: REPO, env, encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`site:build exited ${r.status}\n${r.stdout}\n${r.stderr}`);
   });
+}
+
+/** The file VitePress wrote for a URL path under `base` (cleanUrls: no .html), or null. Only a file counts: Pages answers a folder without an index with a 404. */
+export function builtFileFor(out: string, base: string, pathname: string): string | null {
+  if (!pathname.startsWith(base)) return null;
+  const rel = pathname.slice(base.length);
+  const candidates = rel === '' || rel.endsWith('/') ? [`${rel}index.html`] : [`${rel}.html`, rel, `${rel}/index.html`];
+  for (const c of candidates) if (existsSync(join(out, c)) && statSync(join(out, c)).isFile()) return join(out, c);
+  return null;
 }

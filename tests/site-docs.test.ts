@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
-import { buildSite } from './helpers/site-build';
+import { buildSite, builtFileFor } from './helpers/site-build';
 import { GUIDE_META, GUIDES, REPO_BLOB, rewriteLinks, syncDocs } from '../scripts/site/sync-docs';
 
 const ROOT = resolve(__dirname, '..');
@@ -142,16 +142,6 @@ describe('syncDocs (M7-02)', () => {
   });
 });
 
-/** Maps a built URL under the base to the file VitePress wrote for it. */
-function fileFor(out: string, base: string, path: string): string | null {
-  if (!path.startsWith(base)) return null;
-  const rel = path.slice(base.length);
-  const candidates = rel === '' || rel.endsWith('/') ? [`${rel}index.html`] : [`${rel}.html`, rel, `${rel}/index.html`];
-  // Only a file counts: GitHub Pages answers a folder without an index with a 404.
-  for (const c of candidates) if (existsSync(join(out, c)) && statSync(join(out, c)).isFile()) return join(out, c);
-  return null;
-}
-
 run('built documentation (M7-02)', () => {
   let tmp = '';
   let out = '';
@@ -194,7 +184,7 @@ run('built documentation (M7-02)', () => {
         // Resolved as a browser does: against the URL the page is served at (cleanUrls, no .html).
         const url = new URL(href, here);
         const frag = url.hash.slice(1);
-        const target = fileFor(out, base, url.pathname);
+        const target = builtFileFor(out, base, url.pathname);
         if (!target) {
           broken.push(`${p}: <${tag}> ${href} has no file`);
           continue;
