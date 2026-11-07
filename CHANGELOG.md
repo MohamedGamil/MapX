@@ -14,6 +14,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The site's landing page shows what MapX is and how to start, with its counts of MCP tools, languages, framework detectors and architecture presets, the language and agent lists, and the install and quick-start commands all read from the code and the README at build time (M7-03).
 - A `Pages` workflow builds the site and deploys it to GitHub Pages from `main` (a manual run from another branch only builds it), with the Pages permissions held by the deploy job alone, and CI gains a `Site` job that builds and tests the site on every run (M7-05).
 - The site has a sitemap, canonical URLs, per-page descriptions and a 1200 x 630 share card; its links, anchors and pages are crawled for defects, its pages pass axe-core in both colour schemes (code colours and the search button were fixed for contrast and naming), and its size is held to a budget (M7-06).
+- The landing page shows three dashboard screenshots (the graph, the architecture layer rules, the HTTP pairing), generated from synthetic fixtures by `npm run site:shots` and linked to their full-size files (M7-07).
 
 ### Fixed
 - `docs/mcp-integration.md`: the startup-output example closed its code block early at a nested fence, so the rest of the page rendered wrongly (M7-01).

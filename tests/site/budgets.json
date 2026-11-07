@@ -1,6 +1,6 @@
 {
-  "note": "Byte budgets for the built site (M7-06): the value measured on 2026-11-07 plus about 10 percent. homeGzipBytes is the home page's HTML plus every script, stylesheet and image it loads, each gzipped. totalBytes grows with the guides: raise it for that reason, with the measurement in a report. Never raise one to make a test pass without a reason.",
-  "measured": { "totalBytes": 4023819, "homeGzipBytes": 148468 },
-  "totalBytes": 4430000,
+  "note": "Byte budgets for the built site (M7-06, raised for the screenshots in M7-07): the value measured on 2026-11-07 plus about 10 percent. homeGzipBytes is the home page's HTML plus every script, stylesheet and non-lazy image it loads, each gzipped; the lazy screenshots are not part of it. totalBytes grows with the guides and the images: raise it for that reason, with the measurement in a report. Never raise one to make a test pass without a reason.",
+  "measured": { "totalBytes": 4132661, "homeGzipBytes": 149651 },
+  "totalBytes": 4540000,
   "homeGzipBytes": 163000
 }

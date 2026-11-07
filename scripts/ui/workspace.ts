@@ -124,7 +124,7 @@ export async function serve(root: string): Promise<{ url: string; child: ChildPr
     cwd: root, env: ENV, stdio: ['ignore', 'pipe', 'pipe'],
   });
   await new Promise<void>((res, rej) => {
-    const timer = setTimeout(() => rej(new Error('mapx ui did not start in 60 s')), 60_000);
+    const timer = setTimeout(() => { child.kill(); rej(new Error('mapx ui did not start in 60 s')); }, 60_000);
     const onData = (d: Buffer) => { if (/UI Server running at/.test(String(d))) { clearTimeout(timer); res(); } };
     child.stdout!.on('data', onData);
     child.stderr!.on('data', onData);

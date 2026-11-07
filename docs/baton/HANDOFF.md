@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@055cd0abeedb6b1b206da7316718beccab049894 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@16af6b5561965ffc36cbe26754d5221043e10a15 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M7-06 — Site quality: SEO, accessibility, links and size budgets.
-Evidence: `npx vitest run tests/site-links.test.ts tests/site-seo.test.ts` (exit 0) → docs/baton/reports/M7-06.md; `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-06.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-06.md; `npm run check` (exit 0) → docs/baton/reports/M7-06.md.
+Last completed: M7-07 — Landing media: dashboard screenshots generated from a fixture.
+Evidence: `npx playwright test -c playwright.site.config.ts` (exit 0) → docs/baton/reports/M7-07.md; `npx vitest run tests/site-landing.test.ts tests/site-seo.test.ts tests/site-links.test.ts` (exit 0) → docs/baton/reports/M7-07.md; `npm run site:build` (exit 0) → docs/baton/reports/M7-07.md; `npm run check` (exit 0) → docs/baton/reports/M7-07.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

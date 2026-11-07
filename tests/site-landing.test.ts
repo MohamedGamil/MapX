@@ -13,6 +13,7 @@ import { FrameworkRegistry } from '../src/frameworks/framework-registry.js';
 import { PRESETS } from '../src/arch/config.js';
 import { AgentGenerator } from '../src/agents/generator.js';
 import { buildSite, builtFileFor } from './helpers/site-build';
+import { SCREENSHOTS } from '../scripts/site/screenshot-list';
 import { AGENT_NAMES, LANGUAGE_NAMES, QUICKSTART_COMMANDS, agentKeys, languageIds, siteFacts, type SiteFacts } from '../scripts/site/site-facts';
 
 const ROOT = resolve(__dirname, '..');
@@ -139,6 +140,29 @@ run('built landing page (M7-03)', () => {
     for (const m of prose.matchAll(/(\d+) (languages|MCP tools)/g)) {
       expect(Number(m[1]), m[0]).toBe(m[2] === 'languages' ? languages : facts.mcpTools);
     }
+  });
+
+  it('shows the dashboard screenshots with their alt text, real size, lazy loading and an existing file', () => {
+    const imgs = [...html.matchAll(/<img\s[^>]*?data-v-[^>]*?>|<img\s[^>]*?>/g)].map((m) => m[0]!).filter((t) => /\/img\/dashboard-/.test(t));
+    expect(imgs).toHaveLength(SCREENSHOTS.length);
+    for (const s of SCREENSHOTS) {
+      const tag = imgs.find((t) => t.includes(`/mapx/img/${s.file}`));
+      expect(tag, s.file).toBeDefined();
+      const attr = (name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag!)?.[1];
+      expect(text(attr('alt') ?? ''), `${s.file} alt`).toBe(s.alt);
+      expect(attr('width'), s.file).toBe(String(s.width));
+      expect(attr('height'), s.file).toBe(String(s.height));
+      expect(attr('loading'), s.file).toBe('lazy');
+      expect(existsSync(join(tmp, 'out', 'img', s.file)), `${s.file} is built`).toBe(true);
+      expect(html, s.file).toContain(s.caption);
+      // The picture is shown small beside another: it is a link to the full-size file.
+      const link = new RegExp(`<a\\s[^>]*href="/mapx/img/${s.file.replace('.', '\\.')}"[^>]*>`).exec(html)?.[0];
+      expect(link, `${s.file} link`).toBeDefined();
+      expect(link).toContain('rel="noopener"');
+      expect(link).toContain('target="_blank"');
+      expect(link).toMatch(/aria-label="Open the full-size picture: /);
+    }
+    expect(html).toMatch(/<h2[^>]*id="see"[^>]*>See it</);
   });
 
   it('shows every language and every agent once', () => {

@@ -122,7 +122,11 @@ run('built site: SEO and budgets (M7-06)', () => {
     const html = readFileSync(join(out, 'index.html'), 'utf8');
     const loaded = new Set<string>();
     for (const m of html.matchAll(/<(?:script|link)\s[^>]*?(?:src|href)="(\/mapx\/[^"]+\.(?:js|css))"/g)) loaded.add(m[1]!);
-    for (const m of html.matchAll(/<img\s[^>]*?src="(\/mapx\/[^"]+)"/g)) loaded.add(m[1]!);
+    // Images marked loading="lazy" (the screenshots, below the first screen) are not part of the first load.
+    for (const m of html.matchAll(/<img\s[^>]*?>/g)) {
+      const src = /\ssrc="(\/mapx\/[^"]+)"/.exec(m[0])?.[1];
+      if (src && !/\sloading="lazy"/.test(m[0])) loaded.add(src);
+    }
     expect(loaded.size, 'the home page loads scripts, styles and its image').toBeGreaterThan(3);
     expect([...loaded].some((u) => u.endsWith('.css') && !u.includes('/assets/')), 'vp-icons.css is counted').toBe(true);
     expect([...loaded].some((u) => u.endsWith('.png')), 'the hero image is counted').toBe(true);

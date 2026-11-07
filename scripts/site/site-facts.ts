@@ -16,6 +16,7 @@ import { getBuiltinLanguages } from '../../src/languages/registry.js';
 import { FrameworkRegistry } from '../../src/frameworks/framework-registry.js';
 import { PRESETS } from '../../src/arch/config.js';
 import { AgentGenerator } from '../../src/agents/generator.js';
+import { SCREENSHOTS, type Screenshot } from './screenshot-list.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -43,6 +44,7 @@ export interface SiteFacts {
   install: { npm: string; npx: string };
   quickstart: string[];
   mcpConfig: string;
+  screenshots: Screenshot[];
 }
 
 /** The ids of the languages MapX has a grammar for: not a static file type, and TSX counts as TypeScript. */
@@ -114,6 +116,7 @@ export async function siteFacts(root: string = ROOT): Promise<SiteFacts> {
     install: { npm, npx },
     quickstart,
     mcpConfig: fencedBlockAfter(readme, /^### Claude Desktop/, 'json'),
+    screenshots: [...SCREENSHOTS],
   };
 }
 

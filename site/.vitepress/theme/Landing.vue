@@ -60,6 +60,27 @@ const cards = [
       </div>
     </section>
 
+    <section class="band" aria-labelledby="see">
+      <h2 id="see">See it</h2>
+      <p class="lead">The dashboard that <code>mapx ui</code> serves from your own machine.</p>
+      <div class="shots">
+        <figure v-for="s in facts.screenshots" :key="s.id" :data-shot="s.id">
+          <!-- The pictures are shown at about half size on a wide screen: the link opens the full-size file. -->
+          <a :href="withBase(`/img/${s.file}`)" target="_blank" rel="noopener" :aria-label="`Open the full-size picture: ${s.caption}`">
+            <img
+              :src="withBase(`/img/${s.file}`)"
+              :alt="s.alt"
+              :width="s.width"
+              :height="s.height"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
+          <figcaption>{{ s.caption }}</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <section class="band" aria-labelledby="try">
       <h2 id="try">Install and try it</h2>
       <p class="lead">Install once, then index any repository and ask the graph.</p>
@@ -182,6 +203,39 @@ h2 {
   font-size: 13px;
   color: var(--vp-c-text-2);
 }
+.shots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.shots figure {
+  margin: 0;
+  min-width: 0;
+}
+.shots figure:first-child {
+  grid-column: 1 / -1;
+}
+.shots a {
+  display: block;
+  border-radius: 12px;
+}
+.shots a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+.shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.shots figcaption {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}
 .blocks {
   display: grid;
   gap: 16px;
@@ -233,6 +287,9 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shots {
     grid-template-columns: minmax(0, 1fr);
   }
 }
